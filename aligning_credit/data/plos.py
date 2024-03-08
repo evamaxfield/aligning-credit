@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 
 import logging
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
 
 import pandas as pd
+import requests
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from dataclasses_json import DataClassJsonMixin
+from dotenv import load_dotenv
+from ghapi.all import GhApi
+from parse import Parser
 from tqdm import tqdm
 
 ###############################################################################
@@ -18,7 +24,7 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 
-def load_unprocessed_corpus(
+def _load_unprocessed_corpus(
     sample: int | None = 10000, random_state: int = 12
 ) -> pd.DataFrame:
     """
@@ -56,8 +62,8 @@ def load_unprocessed_corpus(
 @dataclass
 class Author(DataClassJsonMixin):
     full_name: str
-    email: str
-    affliation: str
+    email: str | None
+    affliation: str | None
     roles: str | None
 
 
@@ -72,7 +78,7 @@ class ArticleProcessingResult(DataClassJsonMixin):
     disciplines: str
     repository_url: str
     authors: list[Author]
-    acknowledgement_statement: str
+    acknowledgement_statement: str | None
     funding_statement: str
     funding_sources: str
     publish_date: str
@@ -127,10 +133,10 @@ def _get_journal_info(root: ET.Element, jats_xml_filepath: str) -> JournalInfo |
     # <journal-id journal-id-type="nlm-ta">PLoS Negl Trop Dis</journal-id>
     journal_container = root.find(".//journal-id[@journal-id-type='nlm-ta']")
     if journal_container is None:
-        print(f"No journal name found for: '{jats_xml_filepath}'")
+        log.debug(f"No journal name found for: '{jats_xml_filepath}'")
         return None
     if journal_container.text is None:
-        print(f"No journal name found for: '{jats_xml_filepath}'")
+        log.debug(f"No journal name found for: '{jats_xml_filepath}'")
         return None
     journal_name = journal_container.text
 
@@ -139,10 +145,10 @@ def _get_journal_info(root: ET.Element, jats_xml_filepath: str) -> JournalInfo |
     # <journal-id journal-id-type="pmc">plosntds</journal-id>
     journal_pmc_id_container = root.find(".//journal-id[@journal-id-type='pmc']")
     if journal_pmc_id_container is None:
-        print(f"No journal PMC ID found for: '{jats_xml_filepath}'")
+        log.debug(f"No journal PMC ID found for: '{jats_xml_filepath}'")
         return None
     if journal_pmc_id_container.text is None:
-        print(f"No journal PMC ID found for: '{jats_xml_filepath}'")
+        log.debug(f"No journal PMC ID found for: '{jats_xml_filepath}'")
         return None
     journal_pmc_id = journal_pmc_id_container.text
 
@@ -164,10 +170,10 @@ def _get_article_basic_info(
     # <article-id pub-id-type="doi">10.1371/journal.pntd.0002114</article-id>
     doi_container = root.find(".//article-id[@pub-id-type='doi']")
     if doi_container is None:
-        print(f"No DOI found for: '{jats_xml_filepath}'")
+        log.debug(f"No DOI found for: '{jats_xml_filepath}'")
         return None
     if doi_container.text is None:
-        print(f"No DOI found for: '{jats_xml_filepath}'")
+        log.debug(f"No DOI found for: '{jats_xml_filepath}'")
         return None
     doi = doi_container.text
 
@@ -181,7 +187,7 @@ def _get_article_basic_info(
         ".//subj-group[@subj-group-type='Discipline-v3']"
     )
     if len(discipline_containers) == 0:
-        print(f"No disciplines found for: '{jats_xml_filepath}'")
+        log.debug(f"No disciplines found for: '{jats_xml_filepath}'")
         return None
 
     disciplines_list = []
@@ -201,17 +207,17 @@ def _get_article_basic_info(
     # </pub-date>
     pub_date_container = root.find(".//pub-date[@pub-type='epub']")
     if pub_date_container is None:
-        print(f"No publish date found for: '{jats_xml_filepath}'")
+        log.debug(f"No publish date found for: '{jats_xml_filepath}'")
         return None
 
     pub_year = pub_date_container.find(".//year")
     pub_month = pub_date_container.find(".//month")
     pub_day = pub_date_container.find(".//day")
     if pub_year is None or pub_month is None or pub_day is None:
-        print(f"Invalid publish date found for: '{jats_xml_filepath}'")
+        log.debug(f"Invalid publish date found for: '{jats_xml_filepath}'")
         return None
     if pub_year.text is None or pub_month.text is None or pub_day.text is None:
-        print(f"Invalid publish date found for: '{jats_xml_filepath}'")
+        log.debug(f"Invalid publish date found for: '{jats_xml_filepath}'")
         return None
     publish_date = (
         datetime(
@@ -245,10 +251,10 @@ def _get_article_title_and_abstract(
     # <article-title>TimeTeller: A tool to probe the circadian clock as a multigene dynamical system</article-title>  # noqa: E501
     full_title_container = root.find(".//article-title")
     if full_title_container is None:
-        print(f"No full title found for: '{jats_xml_filepath}'")
+        log.debug(f"No full title found for: '{jats_xml_filepath}'")
         return None
     if full_title_container.text is None:
-        print(f"No full title found for: '{jats_xml_filepath}'")
+        log.debug(f"No full title found for: '{jats_xml_filepath}'")
         return None
     full_title = full_title_container.text
 
@@ -257,10 +263,10 @@ def _get_article_title_and_abstract(
     # <alt-title alt-title-type="running-head">TimeTeller</alt-title>
     short_title_container = root.find(".//alt-title[@alt-title-type='running-head']")
     if short_title_container is None:
-        print(f"No short title found for: '{jats_xml_filepath}'")
+        log.debug(f"No short title found for: '{jats_xml_filepath}'")
         return None
     if short_title_container.text is None:
-        print(f"No short title found for: '{jats_xml_filepath}'")
+        log.debug(f"No short title found for: '{jats_xml_filepath}'")
         return None
     short_title = short_title_container.text
 
@@ -273,10 +279,10 @@ def _get_article_title_and_abstract(
     # We want to select the first, and full, abstract
     abstract_container = root.find(".//abstract")
     if abstract_container is None:
-        print(f"No abstract found for: '{jats_xml_filepath}'")
+        log.debug(f"No abstract found for: '{jats_xml_filepath}'")
         return None
     if abstract_container.text is None:
-        print(f"No abstract found for: '{jats_xml_filepath}'")
+        log.debug(f"No abstract found for: '{jats_xml_filepath}'")
         return None
     abstract = abstract_container.text
 
@@ -289,7 +295,7 @@ def _get_article_title_and_abstract(
 
 @dataclass
 class AcknowledgementAndFundingInfo:
-    acknowledgement_statement: str
+    acknowledgement_statement: str | None
     funding_statement: str
     funding_sources: str
 
@@ -303,13 +309,13 @@ def _get_ack_and_funding_info(
     # <p>We thank the anonymous reviewers for their helpful comments.</p>
     # </ack>
     acknowledgement_statement_container = root.find(".//ack")
-    if acknowledgement_statement_container is None:
-        print(f"No acknowledgement statement found for: '{jats_xml_filepath}'")
-        return None
-    if acknowledgement_statement_container.text is None:
-        print(f"No acknowledgement statement found for: '{jats_xml_filepath}'")
-        return None
-    acknowledgement_statement = acknowledgement_statement_container.text
+    if (
+        acknowledgement_statement_container is None
+        or acknowledgement_statement_container.text is None
+    ):
+        acknowledgement_statement = None
+    else:
+        acknowledgement_statement = acknowledgement_statement_container.text
 
     # Get the funding sources
     # Example:
@@ -336,7 +342,7 @@ def _get_ack_and_funding_info(
     # </funding-source>
     funding_group = root.findall(".//funding-group")
     if len(funding_group) == 0:
-        print(f"No funding sources found for: '{jats_xml_filepath}'")
+        log.debug(f"No funding sources found for: '{jats_xml_filepath}'")
         return None
 
     funding_sources_list = []
@@ -352,10 +358,10 @@ def _get_ack_and_funding_info(
     # <funding-statement>This work was supported by the UK Engineering &amp; Physical Sciences Research Council (EPSRC) (MOAC Doctoral Training Centre grant number EP/F500378/1 for DV and EP/P019811/1 to DAR), by the UK Biotechnology and Biological Sciences Research Council (BB/K003097/1 to DAR), by Cancer Research UK and EPSRC (C53561/A19933 to MV, RD &amp; DAR), by the Anna-Liisa Farquharson Chair in Renal Cell Cancer Research (to GAB) and the UK Medical Research Council Doctoral Training Partnership (MR/N014294/1 for LU and VV). The funders played no role in study design, data collection and analysis, the decision to publish, or the preparation of the manuscript.</funding-statement>  # noqa: E501
     funding_statement_container = root.find(".//funding-statement")
     if funding_statement_container is None:
-        print(f"No funding statement found for: '{jats_xml_filepath}'")
+        log.debug(f"No funding statement found for: '{jats_xml_filepath}'")
         return None
     if funding_statement_container.text is None:
-        print(f"No funding statement found for: '{jats_xml_filepath}'")
+        log.debug(f"No funding statement found for: '{jats_xml_filepath}'")
         return None
     funding_statement = funding_statement_container.text
 
@@ -366,7 +372,7 @@ def _get_ack_and_funding_info(
     )
 
 
-def _get_authors(
+def _get_authors(  # noqa: C901
     root: ET.Element,
     jats_xml_filepath: str,
 ) -> list[Author] | None:
@@ -417,45 +423,56 @@ def _get_authors(
     # <label>5</label>
     # <addr-line>UPR “Chronotherapy, Cancer and Transplantation”, Medical School, Paris-Saclay University, Medical Oncology Department, Paul Brousse Hospital, Villejuif, France</addr-line>  # noqa: E501
     # </aff>
-    author_containers = root.findall(".//contrib[@contrib-type='author']")
+    # Get the first contrib-group
+    contrib_group = root.find(".//contrib-group")
+    if contrib_group is None:
+        log.debug(f"No contrib-group found for: '{jats_xml_filepath}'")
+        return None
+
+    author_containers = contrib_group.findall(".//contrib[@contrib-type='author']")
     if len(author_containers) == 0:
-        print(f"No authors found for: '{jats_xml_filepath}'")
+        log.debug(f"No authors found for: '{jats_xml_filepath}'")
         return None
 
     authors = []
     for author in author_containers:
-        name_container = author.find(".//name")
+        given_names_container = author.find(".//given-names")
+        surname_container = author.find(".//surname")
+        if (
+            given_names_container is None
+            or given_names_container.text is None
+            or surname_container is None
+            or surname_container.text is None
+        ):
+            log.debug(f"Author found without name for: '{jats_xml_filepath}'")
+            continue
+        full_name = f"{given_names_container.text} {surname_container.text}"
+
         email_container = author.find(".//email")
         affliation_xref_container = author.find(".//xref[@ref-type='aff']")
         if (
-            name_container is None
-            or email_container is None
+            email_container is None
             or affliation_xref_container is None
-            or name_container.text is None
             or email_container.text is None
             or "rid" not in affliation_xref_container.attrib
         ):
-            print(f"Invalid author found for: '{jats_xml_filepath}'")
-            continue
+            email = None
+            affliation = None
+        else:
+            email = email_container.text
+            affliation_id = affliation_xref_container.attrib["rid"]
 
-        full_name = name_container.text
-        email = email_container.text
-        affliation_id = affliation_xref_container.attrib["rid"]
-
-        # Get the affliation
-        affliation_container = root.find(f".//aff[@id='{affliation_id}']")
-        if affliation_container is None:
-            print(f"No affliation found for: '{jats_xml_filepath}'")
-            continue
-        # Get the addr-line
-        addr_line_container = affliation_container.find(".//addr-line")
-        if addr_line_container is None:
-            print(f"No addr-line found for: '{jats_xml_filepath}'")
-            continue
-        if addr_line_container.text is None:
-            print(f"No addr-line found for: '{jats_xml_filepath}'")
-            continue
-        affliation = addr_line_container.text
+            # Get the affliation
+            affliation_container = root.find(f".//aff[@id='{affliation_id}']")
+            if affliation_container is None:
+                affliation = None
+            else:
+                # Get the addr-line
+                addr_line_container = affliation_container.find(".//addr-line")
+                if addr_line_container is None or addr_line_container.text is None:
+                    affliation = None
+                else:
+                    affliation = addr_line_container.text
 
         roles_containers = author.findall(".//role")
         if len(roles_containers) == 0:
@@ -479,7 +496,7 @@ def _get_authors(
     return authors
 
 
-def process_corpus(df: pd.DataFrame) -> pd.DataFrame:
+def _first_pass_xml_filter_corpus(df: pd.DataFrame) -> pd.DataFrame:  # noqa: C901
     """
     Process the PLOS corpus to retrieve basic information from each article.
 
@@ -499,8 +516,12 @@ def process_corpus(df: pd.DataFrame) -> pd.DataFrame:
     # Process each row of the provided dataframe, load the XML and extract relevant info
     for jats_xml_filepath in tqdm(df.jats_xml_path, desc="Processing PLOS Corpus"):
         # Load the XML
-        tree = ET.parse(jats_xml_filepath)
-        root = tree.getroot()
+        try:
+            tree = ET.parse(jats_xml_filepath)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            log.error(f"Error parsing XML file: '{jats_xml_filepath}': {e}")
+            continue
 
         # Get the repository URL
         repository_url = _get_repository_url(root, jats_xml_filepath)
@@ -580,3 +601,126 @@ def process_corpus(df: pd.DataFrame) -> pd.DataFrame:
 
     # Return the results
     return pd.DataFrame(per_author_results)
+
+
+def _second_pass_repository_checks(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process the PLOS corpus to check for repository existance and if the repository has
+    common coding language files.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The PLOS corpus.
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed PLOS corpus.
+    """
+    # Load env
+    load_dotenv()
+    gh_api = GhApi(token=os.environ["GITHUB_TOKEN"])
+
+    # Store final results
+    results = []
+
+    # Iter through corpus, get the repository URL, check to see if repo exists
+    for _, row in tqdm(
+        df.iterrows(),
+        desc="Checking repository details",
+        total=len(df),
+    ):
+        # Get the repository URL
+        repository_url = row.repository_url
+
+        # Standardize the URL
+        repository_url = repository_url.strip().lower()
+
+        # Get rid of HTTPS, then HTTP, the www.
+        repository_url = repository_url.replace("https://", "")
+        repository_url = repository_url.replace("http://", "")
+        repository_url = repository_url.replace("www.", "")
+
+        # If no trailing slash always add one
+        if repository_url[-1] != "/":
+            repository_url += "/"
+
+        # Parse for owner and repo name
+        github_url_parser = Parser("github.com/{owner}/{repo}/")
+        parsed_url = github_url_parser.parse(repository_url)
+        if parsed_url is None:
+            log.debug(f"Invalid repository URL: '{repository_url}'")
+            continue
+
+        # Get the owner and the repo name
+        owner = parsed_url["owner"]
+        repo_possibly_extras = parsed_url["repo"]
+
+        # Remove the possible extras by removing after the slash
+        repo_name = repo_possibly_extras.split("/")[0]
+
+        # Check if the repository exists
+        try:
+            time.sleep(1.5)
+            # Call to ecosyste.ms API
+            resp = requests.get(
+                f"https://repos.ecosyste.ms/api/v1/hosts/github/repositories/"
+                f"{owner}/{repo_name}"
+            )
+            resp.raise_for_status()
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                log.debug(f"Repository not found: '{repository_url}'")
+                continue
+            else:
+                log.warning(f"Error checking repository: '{repository_url}': {e}")
+                continue
+
+        # Check repository languages
+        try:
+            time.sleep(1.5)
+            repo_languages = gh_api.repos.list_languages(owner, repo_name)
+        except Exception as e:
+            log.error(f"Error getting repository languages: '{repository_url}': {e}")
+            continue
+
+        # Check languages
+        if all(
+            lang not in repo_languages
+            for lang in [
+                "Python",
+                "R",
+                "RMarkdown",
+                "Jupyter Notebook",
+                "Ruby",
+                "C",
+                "C++",
+                "Java",
+                "Go",
+                "JavaScript",
+                "TypeScript",
+                "Rust",
+                "Julia",
+            ]
+        ):
+            log.debug(
+                f"Repository does not contain any common coding language: "
+                f"'{repository_url}'"
+            )
+            continue
+
+        # Store the results
+        results.append(
+            {
+                **row.to_dict(),
+                # Overwrite with cleaned URL
+                "repository_url": f"https://github.com/{owner}/{repo_name}/",
+                # Add language list
+                "languages": ";".join(repo_languages.keys()),
+            }
+        )
+
+    # Return the results
+    return pd.DataFrame(results)
