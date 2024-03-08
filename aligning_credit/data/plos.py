@@ -366,7 +366,10 @@ def _get_ack_and_funding_info(
     )
 
 
-def _get_authors(root: ET.Element, jats_xml_filepath: str) -> list[Author] | None:
+def _get_authors(
+    root: ET.Element,
+    jats_xml_filepath: str,
+) -> list[Author] | None:
     # Get the authors
     # Example:
     # <contrib-group>
@@ -428,17 +431,13 @@ def _get_authors(root: ET.Element, jats_xml_filepath: str) -> list[Author] | Non
             name_container is None
             or email_container is None
             or affliation_xref_container is None
-        ):
-            print(f"Invalid author found for: '{jats_xml_filepath}'")
-            continue
-
-        if (
-            name_container.text is None
+            or name_container.text is None
             or email_container.text is None
             or "rid" not in affliation_xref_container.attrib
         ):
             print(f"Invalid author found for: '{jats_xml_filepath}'")
             continue
+
         full_name = name_container.text
         email = email_container.text
         affliation_id = affliation_xref_container.attrib["rid"]
