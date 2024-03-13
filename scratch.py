@@ -1,15 +1,14 @@
 from aligning_credit.data import plos
 
 if __name__ == "__main__":
-    df = plos._load_unprocessed_corpus(sample=2000)
+    df = plos._load_unprocessed_corpus(sample=100000)
     results = plos._first_pass_xml_filter_corpus(df)
     print("First pass successful results:")
     print("-" * 80)
     print(
-        f"Number of successful repos after first pass: "
-        f"{len(results.successful_results)}"
+        f"Number of successful papers after first pass: "
+        f"{len(results.successful_results.doi.nunique())}"
     )
-    print(results.successful_results["repository_host"].value_counts())
     print()
     print()
 
@@ -28,8 +27,8 @@ if __name__ == "__main__":
     print("Second pass successful results:")
     print("-" * 80)
     print(
-        f"Number of successful repos after second pass: "
-        f"{len(results.successful_results)}"
+        f"Number of successful papers after second pass: "
+        f"{len(results.successful_results.doi.nunique())}"
     )
     print("Repo Basic Stats:")
     print(results.successful_results["stars_count"].describe())
@@ -47,4 +46,4 @@ if __name__ == "__main__":
     print("=" * 80)
 
     # Store the results
-    results.successful_results.to_parquet("plos-sample.parquet")
+    results.successful_results.to_parquet("processed-plos-corpus.parquet")
