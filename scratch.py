@@ -1,13 +1,13 @@
 from aligning_credit.data import plos
 
 if __name__ == "__main__":
-    df = plos._load_unprocessed_corpus(sample=100000)
+    df = plos._load_unprocessed_corpus(sample=None)
     results = plos._first_pass_xml_filter_corpus(df)
     print("First pass successful results:")
     print("-" * 80)
     print(
         f"Number of successful papers after first pass: "
-        f"{len(results.successful_results.doi.nunique())}"
+        f"{results.successful_results.doi.nunique()}"
     )
     print()
     print()
@@ -24,16 +24,35 @@ if __name__ == "__main__":
     print()
 
     results = plos._second_pass_repository_checks(results.successful_results)
+
+    # Store the results
+    results.successful_results.to_parquet("processed-plos-corpus.parquet")
+
     print("Second pass successful results:")
     print("-" * 80)
     print(
         f"Number of successful papers after second pass: "
-        f"{len(results.successful_results.doi.nunique())}"
+        f"{results.successful_results.doi.nunique()}"
     )
     print("Repo Basic Stats:")
-    print(results.successful_results["stars_count"].describe())
+    print(
+        results.successful_results.groupby("doi")
+        .first()
+        .repository_stargazers_count.describe()
+    )
     print()
-    print(results.successful_results["open_issues_count"].describe())
+    print(
+        results.successful_results.groupby("doi")
+        .first()
+        .repository_open_issues_count.describe()
+    )
+    print()
+    print(
+        results.successful_results.groupby("doi")
+        .first()
+        .repository_license.value_counts()
+    )
+    print()
     print()
 
     print("Second pass errored results:")
@@ -44,6 +63,3 @@ if __name__ == "__main__":
     print()
     print()
     print("=" * 80)
-
-    # Store the results
-    results.successful_results.to_parquet("processed-plos-corpus.parquet")

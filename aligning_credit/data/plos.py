@@ -724,18 +724,22 @@ def _second_pass_repository_checks(df: pd.DataFrame) -> SuccessAndErroredResults
     successful_results = []
     errored_results = []
 
-    # Iter through corpus, get the repository URL, check to see if repo exists
-    for _, row in tqdm(
-        df.iterrows(),
+    # Iter through corpus, grouping by DOI
+    # (as there are multiple rows with all the same data except authors)
+    for _, group in tqdm(
+        df.groupby("doi"),
         desc="Checking repository details",
-        total=len(df),
+        total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
         time.sleep(0.5)
 
+        # Get first row to use for data extraction
+        # The other rows have the same repository data so we can just use the first
+        row = group.iloc[0]
+
         # Construct the repo path
         repo_path = f"{row.repository_owner}/{row.repository_name}"
-        new_repository_data = {}
 
         # Check if the repository exists
         try:
@@ -748,14 +752,12 @@ def _second_pass_repository_checks(df: pd.DataFrame) -> SuccessAndErroredResults
 
             # Keep some of the data
             data = resp.json()
-            new_repository_data = {
-                "stars_count": data["stargazers_count"],
-                "open_issues_count": data["open_issues_count"],
-                "forks_count": data["forks_count"],
-                "most_recent_push_datetime": data["pushed_at"],
-                "license": data["license"],
-                "repository_data_cache_datetime": datetime.now().isoformat(),
-            }
+            group["repository_stargazers_count"] = data["stargazers_count"]
+            group["repository_open_issues_count"] = data["open_issues_count"]
+            group["repository_forks_count"] = data["forks_count"]
+            group["repository_most_recent_push_datetime"] = data["pushed_at"]
+            group["repository_license"] = data["license"]
+            group["repository_data_cache_datetime"] = datetime.now().isoformat()
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
@@ -825,18 +827,13 @@ def _second_pass_repository_checks(df: pd.DataFrame) -> SuccessAndErroredResults
         languages_string = ""
         for lang in repo_languages:
             languages_string += f"{lang}:{repo_languages[lang]};"
-        new_repository_data["languages"] = languages_string
+        group["repository_languages"] = languages_string
 
-        # Store the results
-        successful_results.append(
-            {
-                **row.to_dict(),
-                **new_repository_data,
-            }
-        )
+        # Add to successful results
+        successful_results.append(group)
 
     # Return the results
     return SuccessAndErroredResults(
-        successful_results=pd.DataFrame(successful_results),
+        successful_results=pd.concat(successful_results),
         errored_results=pd.DataFrame(errored_results),
     )
