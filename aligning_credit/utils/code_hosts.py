@@ -58,11 +58,13 @@ SOURCEFORGE_REPO_PARSER = Parser(
 
 #######################################################################################
 
+
 @dataclass
 class CodeHostResult:
     host: str
     owner: str | None
     repo: str | None
+
 
 def _parse_github_urls(url: str) -> CodeHostResult | None:
     if result := GITHUB_COM_REPO_PARSER.parse(url):
@@ -77,9 +79,9 @@ def _parse_github_urls(url: str) -> CodeHostResult | None:
         return CodeHostResult("github", result["owner"], None)
     if result := GITHUB_IO_OWNER_PARSER_TYPO.parse(url):
         return CodeHostResult("github", result["owner"], None)
-    
+
     return None
-    
+
 
 def _parse_gitlab_urls(url: str) -> CodeHostResult | None:
     if result := GITLAB_COM_REPO_PARSER.parse(url):
@@ -94,9 +96,9 @@ def _parse_gitlab_urls(url: str) -> CodeHostResult | None:
         return CodeHostResult("gitlab", result["owner"], None)
     if result := GITLAB_IO_OWNER_PARSER_TYPO.parse(url):
         return CodeHostResult("gitlab", result["owner"], None)
-    
+
     return None
-    
+
 
 def _parse_bitbucket_urls(url: str) -> CodeHostResult | None:
     if result := BITBUCKET_ORG_REPO_PARSER.parse(url):
@@ -104,14 +106,17 @@ def _parse_bitbucket_urls(url: str) -> CodeHostResult | None:
 
     return None
 
+
 def _parse_sourceforge_urls(url: str) -> CodeHostResult | None:
     if result := SOURCEFORGE_REPO_PARSER.parse(url):
         return CodeHostResult("sourceforge", None, result["repo"])
-    
+
     return None
-    
+
+
 def _clean_extra_slashes_from_repo(repo: str) -> str:
     return repo.split("/")[0]
+
 
 def parse_code_host_url(url: str) -> CodeHostResult:
     # Standardize the URL
@@ -136,11 +141,11 @@ def parse_code_host_url(url: str) -> CodeHostResult:
         result = bb_result
     if sf_result := _parse_sourceforge_urls(url):
         result = sf_result
-    
+
     # If no result, raise an error
     if result is None:
         raise ValueError("Could not parse code host URL")
-    
+
     # Clean the repo name
     if result.repo:
         result.repo = _clean_extra_slashes_from_repo(result.repo)
@@ -148,7 +153,7 @@ def parse_code_host_url(url: str) -> CodeHostResult:
     # For all hosts except SourceForge, the owner is required
     if result.host != "sourceforge" and result.owner is None:
         raise ValueError("Could not parse code host URL")
-    
+
     # For SourceForge, the repo is required
     if result.host == "sourceforge" and result.repo is None:
         raise ValueError("Could not parse code host URL")

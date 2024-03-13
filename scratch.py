@@ -21,4 +21,4 @@ if __name__ == "__main__":
     # df = plos._second_pass_repository_checks(df)
     # print(df.sample(10))
     # print(len(df))
-    results.successful_results.to_parquet('plos_sample.parquet')
+    results.successful_results.to_parquet("plos_sample.parquet")
