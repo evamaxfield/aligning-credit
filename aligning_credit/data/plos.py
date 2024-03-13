@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 
 import logging
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
 
 import pandas as pd
+import requests
 import tldextract
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from dataclasses_json import DataClassJsonMixin
+from dotenv import load_dotenv
+from ghapi.all import GhApi
 from tqdm import tqdm
 
 from ..utils.code_hosts import CodeHostResult, parse_code_host_url
@@ -559,8 +564,8 @@ def _first_pass_xml_filter_corpus(  # noqa: C901
 
     Returns
     -------
-    pd.DataFrame
-        The processed PLOS corpus.
+    SuccessAndErroredResults
+        The processed PLOS corpus (in success and errored dataframes)
     """
     # Store final results
     successful_results = []
@@ -646,6 +651,7 @@ def _first_pass_xml_filter_corpus(  # noqa: C901
         for author in result.authors:
             per_author_results.append(
                 {
+                    "jats_xml_path": jats_xml_filepath,
                     "journal_name": result.journal_name,
                     "journal_pmc_id": result.journal_pmc_id,
                     "doi": result.doi,
@@ -655,7 +661,7 @@ def _first_pass_xml_filter_corpus(  # noqa: C901
                     "disciplines": result.disciplines,
                     "repository_host": result.repository_details.host,
                     "repository_owner": result.repository_details.owner,
-                    "repository_repo": result.repository_details.repo,
+                    "repository_name": result.repository_details.name,
                     "acknowledgement_statement": result.acknowledgement_statement,
                     "funding_statement": result.funding_statement,
                     "funding_sources": result.funding_sources,
@@ -674,7 +680,7 @@ def _first_pass_xml_filter_corpus(  # noqa: C901
     )
 
 
-def _second_pass_repository_checks(df: pd.DataFrame) -> pd.DataFrame:
+def _second_pass_repository_checks(df: pd.DataFrame) -> SuccessAndErroredResults:
     """
     Process the PLOS corpus to check for repository existance and if the repository has
     common coding language files.
@@ -686,86 +692,151 @@ def _second_pass_repository_checks(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame
-        The processed PLOS corpus.
+    SuccessAndErroredResults
+        The processed PLOS corpus (in success and errored dataframes)
     """
-    # # Load env
-    # load_dotenv()
-    # gh_api = GhApi(token=os.environ["GITHUB_TOKEN"])
+    # Load env
+    load_dotenv()
+    gh_api = GhApi(token=os.environ["GITHUB_TOKEN"])
 
-    # # Store final results
-    # results = []
+    # Get rate limit status of GitHub API
+    rate_limit = gh_api.rate_limit.get()
+    current_core_limit = rate_limit["resources"]["core"]["remaining"]
+    if current_core_limit <= 100:
+        raise ValueError(
+            f"GitHub API rate limit is too low: {current_core_limit}. "
+            f"Ensure that you have an up-to-date API key."
+        )
 
-    # # Iter through corpus, get the repository URL, check to see if repo exists
-    # for _, row in tqdm(
-    #     df.iterrows(),
-    #     desc="Checking repository details",
-    #     total=len(df),
-    # ):
-    #     # Get the repository URL
-    #     repository_url = row.repository_url
+    # Filter out non-GitHub repositories from the dataframe
+    # Log how many were filtered out
+    n_non_github = len(df[df.repository_host != "github"])
+    log.info(f"Filtering out {n_non_github} non-GitHub repositories")
+    df = df[df.repository_host == "github"].copy()
 
-    #     # Check if the repository exists
-    #     try:
-    #         time.sleep(1.5)
-    #         # Call to ecosyste.ms API
-    #         resp = requests.get(
-    #             f"https://repos.ecosyste.ms/api/v1/hosts/github/repositories/"
-    #             f"{owner}/{repo_name}"
-    #         )
-    #         resp.raise_for_status()
+    # Filtering out non-Repository repositories from the dataframe
+    # Log how many were filtered out
+    n_non_repo = len(df[df.repository_name.isna()])
+    log.info(f"Filtering out {n_non_repo} organization URLs")
+    df = df[~df.repository_name.isna()].copy()
 
-    #     except requests.exceptions.HTTPError as e:
-    #         if e.response.status_code == 404:
-    #             log.debug(f"Repository not found: '{repository_url}'")
-    #             continue
-    #         else:
-    #             log.warning(f"Error checking repository: '{repository_url}': {e}")
-    #             continue
+    # Store final results
+    successful_results = []
+    errored_results = []
 
-    #     # Check repository languages
-    #     try:
-    #         time.sleep(1.5)
-    #         repo_languages = gh_api.repos.list_languages(owner, repo_name)
-    #     except Exception as e:
-    #         log.error(f"Error getting repository languages: '{repository_url}': {e}")
-    #         continue
+    # Iter through corpus, get the repository URL, check to see if repo exists
+    for _, row in tqdm(
+        df.iterrows(),
+        desc="Checking repository details",
+        total=len(df),
+    ):
+        # Sleep to be nice to APIs
+        time.sleep(0.5)
 
-    #     # Check languages
-    #     if all(
-    #         lang not in repo_languages
-    #         for lang in [
-    #             "Python",
-    #             "R",
-    #             "RMarkdown",
-    #             "Jupyter Notebook",
-    #             "Ruby",
-    #             "C",
-    #             "C++",
-    #             "Java",
-    #             "Go",
-    #             "JavaScript",
-    #             "TypeScript",
-    #             "Rust",
-    #             "Julia",
-    #         ]
-    #     ):
-    #         log.debug(
-    #             f"Repository does not contain any common coding language: "
-    #             f"'{repository_url}'"
-    #         )
-    #         continue
+        # Construct the repo path
+        repo_path = f"{row.repository_owner}/{row.repository_name}"
+        new_repository_data = {}
 
-    #     # Store the results
-    #     results.append(
-    #         {
-    #             **row.to_dict(),
-    #             # Overwrite with cleaned URL
-    #             "repository_url": f"https://github.com/{owner}/{repo_name}/",
-    #             # Add language list
-    #             "languages": ";".join(repo_languages.keys()),
-    #         }
-    #     )
+        # Check if the repository exists
+        try:
+            # Call to ecosyste.ms API
+            resp = requests.get(
+                f"https://repos.ecosyste.ms/api/v1/hosts/github/repositories/"
+                f"{repo_path}"
+            )
+            resp.raise_for_status()
 
-    # # Return the results
-    # return pd.DataFrame(results)
+            # Keep some of the data
+            data = resp.json()
+            new_repository_data = {
+                "stars_count": data["stargazers_count"],
+                "open_issues_count": data["open_issues_count"],
+                "forks_count": data["forks_count"],
+                "most_recent_push_datetime": data["pushed_at"],
+                "license": data["license"],
+                "repository_data_cache_datetime": datetime.now().isoformat(),
+            }
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                errored_results.append(
+                    ErrorResult(
+                        jats_xml_path=row.jats_xml_path,
+                        step="Repository existance check",
+                        error="Repository not found",
+                    ).to_dict()
+                )
+                continue
+            else:
+                errored_results.append(
+                    ErrorResult(
+                        jats_xml_path=row.jats_xml_path,
+                        step="Repository existance check",
+                        error=f"Error with Ecosyste.ms API service: {e}",
+                    ).to_dict()
+                )
+                continue
+
+        # Check repository languages
+        try:
+            repo_languages = gh_api.repos.list_languages(
+                row.repository_owner,
+                row.repository_name,
+            )
+        except Exception as e:
+            errored_results.append(
+                ErrorResult(
+                    jats_xml_path=row.jats_xml_path,
+                    step="Repository language check",
+                    error=f"Error with GitHub API service: {e}",
+                ).to_dict()
+            )
+            continue
+
+        # Check languages
+        if all(
+            lang not in repo_languages
+            for lang in [
+                "Python",
+                "R",
+                "RMarkdown",
+                "Jupyter Notebook",
+                "Ruby",
+                "C",
+                "C++",
+                "Java",
+                "Go",
+                "JavaScript",
+                "TypeScript",
+                "Rust",
+                "Julia",
+            ]
+        ):
+            errored_results.append(
+                ErrorResult(
+                    jats_xml_path=row.jats_xml_path,
+                    step="Repository language check",
+                    error="No common coding languages found",
+                ).to_dict()
+            )
+            continue
+
+        # Add languages to new repository data
+        languages_string = ""
+        for lang in repo_languages:
+            languages_string += f"{lang}:{repo_languages[lang]};"
+        new_repository_data["languages"] = languages_string
+
+        # Store the results
+        successful_results.append(
+            {
+                **row.to_dict(),
+                **new_repository_data,
+            }
+        )
+
+    # Return the results
+    return SuccessAndErroredResults(
+        successful_results=pd.DataFrame(successful_results),
+        errored_results=pd.DataFrame(errored_results),
+    )

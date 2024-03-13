@@ -63,7 +63,7 @@ SOURCEFORGE_REPO_PARSER = Parser(
 class CodeHostResult:
     host: str
     owner: str | None
-    repo: str | None
+    name: str | None
 
 
 def _parse_github_urls(url: str) -> CodeHostResult | None:
@@ -147,15 +147,15 @@ def parse_code_host_url(url: str) -> CodeHostResult:
         raise ValueError("Could not parse code host URL")
 
     # Clean the repo name
-    if result.repo:
-        result.repo = _clean_extra_slashes_from_repo(result.repo)
+    if result.name:
+        result.name = _clean_extra_slashes_from_repo(result.name)
 
     # For all hosts except SourceForge, the owner is required
     if result.host != "sourceforge" and result.owner is None:
         raise ValueError("Could not parse code host URL")
 
-    # For SourceForge, the repo is required
-    if result.host == "sourceforge" and result.repo is None:
+    # For SourceForge, the name is required
+    if result.host == "sourceforge" and result.name is None:
         raise ValueError("Could not parse code host URL")
 
     return result
