@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 from ghapi.all import GhApi
 from tqdm import tqdm
 
-from .types import ErrorResult, SuccessAndErroredResults, DeveloperDetails
 from . import ml
+from .types import DeveloperDetails, ErrorResult, SuccessAndErroredResults
 
 ###############################################################################
 
@@ -295,6 +295,7 @@ def _get_repository_contributors(
         errored_results=pd.DataFrame(errored_results),
     )
 
+
 class AuthorDevClassification:
     dev_author = "dev_author"
     dev_not_author = "dev_not_author"
@@ -320,7 +321,7 @@ def _match_repository_contributors_to_authors(
         total=contributors_df.doi.nunique(),
     ):
         # Get the matching group
-        author_group = authors_df[authors_df.doi==contributor_group.doi.iloc[0]]
+        author_group = authors_df[authors_df.doi == contributor_group.doi.iloc[0]]
 
         # Get the matches
         matches = ml.match_devs_and_authors(
@@ -338,20 +339,34 @@ def _match_repository_contributors_to_authors(
         )
 
         # Create rows for everyone, but
-        # for authors-who-were-matched-to-devs, record both their full_name and their dev details
-        # for authors-who-were-not-matched-to-devs, record their full_name and None for dev details
-        # for devs-who-were-not-matched-to-authors, record None for author details
+
+        # for authors-who-were-matched-to-devs,
+        # record both their full_name and their dev details
+
+        # for authors-who-were-not-matched-to-devs,
+        # record their full_name and None for dev details
+
+        # for devs-who-were-not-matched-to-authors,
+        # record None for author details
         for dev_username, author_full_name in matches.items():
             results.append(
                 {
-                    **author_group.loc[author_group.full_name==author_full_name].iloc[0].to_dict(),
+                    **author_group.loc[author_group.full_name == author_full_name]
+                    .iloc[0]
+                    .to_dict(),
                     "repository_contributor_username": dev_username,
-                    "repository_contributor_name": contributor_group[contributor_group.repository_contributor_username==dev_username].repository_contributor_name.iloc[0],
-                    "repository_contributor_email": contributor_group[contributor_group.repository_contributor_username==dev_username].repository_contributor_email.iloc[0],
+                    "repository_contributor_name": contributor_group[
+                        contributor_group.repository_contributor_username
+                        == dev_username
+                    ].repository_contributor_name.iloc[0],
+                    "repository_contributor_email": contributor_group[
+                        contributor_group.repository_contributor_username
+                        == dev_username
+                    ].repository_contributor_email.iloc[0],
                     "author_dev_classification": AuthorDevClassification.dev_author,
                 }
             )
-        
+
         for _, row in contributor_group.iterrows():
             if row.repository_contributor_username not in matches:
                 results.append(
@@ -363,23 +378,35 @@ def _match_repository_contributors_to_authors(
                         "affliation": None,
                         "roles": None,
                         # Add dev details
-                        "repository_contributor_username": row.repository_contributor_username,
-                        "repository_contributor_name": row.repository_contributor_name,
-                        "repository_contributor_email": row.repository_contributor_email,
-                        "author_dev_classification": AuthorDevClassification.dev_not_author,
+                        "repository_contributor_username": (
+                            row.repository_contributor_username
+                        ),
+                        "repository_contributor_name": (
+                            row.repository_contributor_name
+                        ),
+                        "repository_contributor_email": (
+                            row.repository_contributor_email
+                        ),
+                        "author_dev_classification": (
+                            AuthorDevClassification.dev_not_author
+                        ),
                     }
                 )
-        
+
         for author_full_name in author_group.full_name.tolist():
             if author_full_name not in matches.values():
                 results.append(
                     {
-                        **author_group.loc[author_group.full_name==author_full_name].iloc[0].to_dict(),
+                        **author_group.loc[author_group.full_name == author_full_name]
+                        .iloc[0]
+                        .to_dict(),
                         # Empty dev details
                         "repository_contributor_username": None,
                         "repository_contributor_name": None,
                         "repository_contributor_email": None,
-                        "author_dev_classification": AuthorDevClassification.author_not_dev,
+                        "author_dev_classification": (
+                            AuthorDevClassification.author_not_dev
+                        ),
                     }
                 )
 

@@ -1,5 +1,6 @@
-from aligning_credit import code
 import pandas as pd
+
+from aligning_credit import code
 
 if __name__ == "__main__":
     df = pd.read_parquet("processed-plos-corpus.parquet")
@@ -22,7 +23,9 @@ if __name__ == "__main__":
         print(repo_contrib_results.errored_results.step.value_counts())
         print(repo_contrib_results.errored_results.error.value_counts())
 
-    df = code._match_repository_contributors_to_authors(df, repo_contrib_results.successful_results)
+    df = code._match_repository_contributors_to_authors(
+        df, repo_contrib_results.successful_results
+    )
 
     print(df)
 
