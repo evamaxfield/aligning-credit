@@ -35,6 +35,10 @@ dependencies = [
   "python-dotenv>=1,<2",
   "tqdm>=4,<5",
   "typer>=0.9.0",
+  # ml and stats
+  "scikit-learn>=1,<2",
+  "sentence-transformers>=2,<3",
+  "skops>=0.9.0,<1",
   # processing
   "ghapi>=1,<2",
   "requests>=2,<3",

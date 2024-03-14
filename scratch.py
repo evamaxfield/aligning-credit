@@ -1,8 +1,8 @@
-from aligning_credit.data import plos
+from aligning_credit import code, plos
 
 if __name__ == "__main__":
     df = plos._load_unprocessed_corpus(sample=None)
-    results = plos._first_pass_xml_filter_corpus(df)
+    results = plos._process_plos_xml_files(df)
     print("First pass successful results:")
     print("-" * 80)
     print(
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     results.successful_results.to_parquet("first-pass-plos-corpus-successful.parquet")
     results.errored_results.to_parquet("first-pass-plos-corpus-errored.parquet")
 
-    results = plos._second_pass_repository_checks(results.successful_results)
+    results = code._filter_repositories_in_plos_dataset(results.successful_results)
 
     # Store the results
     results.successful_results.to_parquet("processed-plos-corpus.parquet")
