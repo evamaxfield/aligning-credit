@@ -23,10 +23,15 @@ if __name__ == "__main__":
     print()
     print()
 
+    # Store these first pass results
+    results.successful_results.to_parquet("first-pass-plos-corpus-successful.parquet")
+    results.errored_results.to_parquet("first-pass-plos-corpus-errored.parquet")
+
     results = plos._second_pass_repository_checks(results.successful_results)
 
     # Store the results
     results.successful_results.to_parquet("processed-plos-corpus.parquet")
+    results.errored_results.to_parquet("second-pass-plos-corpus-errored.parquet")
 
     print("Second pass successful results:")
     print("-" * 80)
