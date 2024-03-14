@@ -4,7 +4,14 @@ from aligning_credit import code
 
 if __name__ == "__main__":
     df = pd.read_parquet("processed-plos-corpus.parquet")
-    repo_contrib_results = code._get_repository_contributors(df.sample(10))
+
+    # Get a random sample of 10 dois
+    dois = df.sample(10).doi.tolist()
+
+    # Get all rows for these dois
+    df_sample = df[df.doi.isin(dois)]
+
+    repo_contrib_results = code._get_repository_contributors(df_sample)
 
     repo_contrib_results.successful_results.to_parquet(
         "repo-contributors-successful.parquet"
@@ -24,7 +31,7 @@ if __name__ == "__main__":
         print(repo_contrib_results.errored_results.error.value_counts())
 
     df = code._match_repository_contributors_to_authors(
-        df, repo_contrib_results.successful_results
+        df_sample, repo_contrib_results.successful_results
     )
 
     print(df)
