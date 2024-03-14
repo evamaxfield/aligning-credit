@@ -2,11 +2,10 @@
 
 import logging
 
+import xarray as xr
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegressionCV
-import xarray as xr
 from skops import io as skio
-import numpy as np
 
 from .data import DATA_FILES_DIR
 from .types import DeveloperDetails
@@ -104,14 +103,25 @@ def match_devs_and_authors(
     for dev in devs:
         this_dev_data = []
         for author in authors:
-            this_dev_data.append(DEV_AUTHOR_EM_TEMPLATE.format(dev_username=dev.username, dev_name=dev.name, dev_email=dev.email, author_name=author))
-        
-        data.append(this_dev_data)
-    
-    # Construct the array
-    arr = xr.DataArray(data, dims=("dev", "author"), coords={"dev": [dev.username for dev in devs], "author": authors})
+            this_dev_data.append(
+                DEV_AUTHOR_EM_TEMPLATE.format(
+                    dev_username=dev.username,
+                    dev_name=dev.name,
+                    dev_email=dev.email,
+                    author_name=author,
+                )
+            )
 
-    # Create embeddings for all of the pairs and add a new dim to the array with the dimension
+        data.append(this_dev_data)
+
+    # Construct the array
+    arr = xr.DataArray(
+        data,
+        dims=("dev", "author"),
+        coords={"dev": [dev.username for dev in devs], "author": authors},
+    )
+
+    # Create embeddings for all of the pairs
     log.debug("Creating embeddings for all dev-author pairs")
     embeddings = embed_model.encode(arr.values.flatten())
 
@@ -119,7 +129,11 @@ def match_devs_and_authors(
     embeddings = embeddings.reshape(len(devs), len(authors), -1)
 
     # Make a new xarray with the embeddings
-    arr = xr.DataArray(embeddings, dims=("dev", "author", "embedding_dim"), coords={"dev": [dev.username for dev in devs], "author": authors})
+    arr = xr.DataArray(
+        embeddings,
+        dims=("dev", "author", "embedding_dim"),
+        coords={"dev": [dev.username for dev in devs], "author": authors},
+    )
 
     # Predict the matches
     log.debug("Predicting matches")
@@ -129,14 +143,18 @@ def match_devs_and_authors(
     preds = preds.reshape(len(devs), len(authors))
 
     # Make a new xarray with the predictions
-    arr = xr.DataArray(preds, dims=("dev", "author"), coords={"dev": [dev.username for dev in devs], "author": authors})
+    arr = xr.DataArray(
+        preds,
+        dims=("dev", "author"),
+        coords={"dev": [dev.username for dev in devs], "author": authors},
+    )
 
-    # Create a dictionary of matches where the dev is the key and the author is the value
-    # Only add those pairs to the dictionary if the prediction is "match"
+    # Create a dict of matches where the dev is the key and the author is the value
+    # Only add those pairs to the dict if the prediction is "match"
     matches = {}
     for dev in devs:
         for author in authors:
             if arr.sel(dev=dev.username, author=author).values == "match":
                 matches[dev.username] = author
-    
+
     return matches
