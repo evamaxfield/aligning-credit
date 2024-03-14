@@ -10,7 +10,7 @@ from dataclasses_json import DataClassJsonMixin
 
 @dataclass
 class ErrorResult(DataClassJsonMixin):
-    jats_xml_path: str
+    identifier: str
     step: str
     error: str
     extra_data: str | None = None

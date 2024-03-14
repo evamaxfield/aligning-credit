@@ -95,7 +95,7 @@ def _get_repository_url(
     data_availability = root.find(".//custom-meta[@id='data-availability']")
     if data_availability is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Data Availability",
             error="No data-availability block found",
         )
@@ -104,7 +104,7 @@ def _get_repository_url(
     ext_link = data_availability.find(".//ext-link[@ext-link-type='uri']")
     if ext_link is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Data Availability",
             error="No link found within data-availability-block",
         )
@@ -115,7 +115,7 @@ def _get_repository_url(
     # Check for text
     if not isinstance(repository_url, str):
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Data Availability",
             error="No link found within data-availability-block",
         )
@@ -128,7 +128,7 @@ def _get_repository_url(
         ext = tldextract.extract(repository_url)
 
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Data Availability",
             error=str(e),
             extra_data=f"{ext.subdomain}.{ext.domain}.{ext.suffix}",
@@ -151,13 +151,13 @@ def _get_journal_info(
     journal_container = root.find(".//journal-id[@journal-id-type='nlm-ta']")
     if journal_container is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Journal Parsing",
             error="No journal ID found",
         )
     if journal_container.text is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Journal Parsing",
             error="No journal ID found",
         )
@@ -192,7 +192,7 @@ def _get_article_basic_info(
     doi_container = root.find(".//article-id[@pub-id-type='doi']")
     if doi_container is None or doi_container.text is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="DOI Parsing",
             error="No article DOI found",
         )
@@ -229,7 +229,7 @@ def _get_article_basic_info(
     pub_date_container = root.find(".//pub-date[@pub-type='epub']")
     if pub_date_container is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Publish Date Parsing",
             error="No publish date found",
         )
@@ -246,7 +246,7 @@ def _get_article_basic_info(
         or pub_day.text is None
     ):
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Publish Date Parsing",
             error="No publish date found",
         )
@@ -284,7 +284,7 @@ def _get_article_title_and_abstract(
     full_title_container = root.find(".//article-title")
     if full_title_container is None or full_title_container.text is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Article Title Parsing",
             error="No article title found",
         )
@@ -310,7 +310,7 @@ def _get_article_title_and_abstract(
     abstract_container = root.find(".//abstract")
     if abstract_container is None or abstract_container.text is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Abstract Parsing",
             error="No abstract found",
         )
@@ -454,7 +454,7 @@ def _get_authors(  # noqa: C901
     contrib_group = root.find(".//contrib-group")
     if contrib_group is None:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Authors Parsing",
             error="No contrib-group found",
         )
@@ -462,7 +462,7 @@ def _get_authors(  # noqa: C901
     author_containers = contrib_group.findall(".//contrib[@contrib-type='author']")
     if len(author_containers) == 0:
         return ErrorResult(
-            jats_xml_path=jats_xml_filepath,
+            identifier=jats_xml_filepath,
             step="Authors Parsing",
             error="No author found",
         )
@@ -478,7 +478,7 @@ def _get_authors(  # noqa: C901
             or surname_container.text is None
         ):
             return ErrorResult(
-                jats_xml_path=jats_xml_filepath,
+                identifier=jats_xml_filepath,
                 step="Authors Parsing",
                 error="No author name found",
             )
@@ -563,7 +563,7 @@ def _process_plos_xml_files(  # noqa: C901
             log.error(f"Error parsing XML file: '{jats_xml_filepath}': {e}")
             errored_results.append(
                 ErrorResult(
-                    jats_xml_path=jats_xml_filepath,
+                    identifier=jats_xml_filepath,
                     step="XML Parsing",
                     error=str(e),
                 ).to_dict()
