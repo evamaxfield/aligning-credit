@@ -7,6 +7,7 @@ from dataclasses_json import DataClassJsonMixin
 
 ###############################################################################
 
+
 @dataclass
 class ErrorResult(DataClassJsonMixin):
     jats_xml_path: str
@@ -14,10 +15,12 @@ class ErrorResult(DataClassJsonMixin):
     error: str
     extra_data: str | None = None
 
+
 @dataclass
 class SuccessAndErroredResults:
     successful_results: pd.DataFrame
     errored_results: pd.DataFrame
+
 
 @dataclass
 class DeveloperDetails:

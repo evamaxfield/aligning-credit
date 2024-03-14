@@ -46,6 +46,7 @@ def _load_dev_author_em_model() -> LogisticRegressionCV:
     log.debug(f"Loading author EM model from {DEV_AUTHOR_EM_CLASSIFIER_PATH}")
     return skio.load(DEV_AUTHOR_EM_CLASSIFIER_PATH, trust=True)
 
+
 def _load_dev_author_em_embedding_model() -> SentenceTransformer:
     """
     Load the author EM embedding model.
@@ -78,7 +79,7 @@ def match_devs_and_authors(
         The loaded author EM model, by default None
     loaded_embedding_model : SentenceTransformer, optional
         The loaded embedding model, by default None
-    
+
     Returns
     -------
     dict[str, str]
@@ -86,10 +87,10 @@ def match_devs_and_authors(
     """
     # If no loaded classifer, load the model
     if loaded_dev_author_em_model is None:
-        clf = _load_dev_author_em_model()
+        _load_dev_author_em_model()
     else:
-        clf = loaded_dev_author_em_model
-    
+        pass
+
     # If no loaded embedding model, load the model
     if loaded_embedding_model is None:
         embed_model = _load_dev_author_em_embedding_model()
@@ -97,7 +98,7 @@ def match_devs_and_authors(
         embed_model = loaded_embedding_model
 
     # Create pairs of developers and authors and fill in the template
-    pairs = {}
+    pairs: dict[str, dict[str, str]] = {}
     pair_strs = []
     for dev_details in devs:
         pairs[dev_details.username] = {}
@@ -113,4 +114,6 @@ def match_devs_and_authors(
 
     # Create embeddings for all of the pairs
     log.debug("Creating embeddings for all dev-author pairs")
-    pair_embeddings = embed_model.encode(pair_strs)
+    embed_model.encode(pair_strs)
+
+    return {}

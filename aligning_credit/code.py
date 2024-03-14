@@ -178,6 +178,7 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
         errored_results=pd.DataFrame(errored_results),
     )
 
+
 def _match_repository_contributors_to_authors(
     df: pd.DataFrame,
 ) -> SuccessAndErroredResults:
@@ -193,14 +194,12 @@ def _match_repository_contributors_to_authors(
             f"GitHub API rate limit is too low: {current_core_limit}. "
             f"Ensure that you have an up-to-date API key."
         )
-    
+
     # Store final results
-    successful_results = []
-    errored_results = []
 
     # Iter through corpus, grouping by DOI
     # (as there are multiple rows with all the same data except authors)
-    for _, group in tqdm(
+    for _, _group in tqdm(
         df.groupby("doi"),
         desc="Matching repository contributors to authors",
         total=df.doi.nunique(),
@@ -208,4 +207,9 @@ def _match_repository_contributors_to_authors(
         # Sleep to be nice to APIs
         time.sleep(0.5)
 
-        
+        pass
+
+    return SuccessAndErroredResults(
+        successful_results=pd.DataFrame(),
+        errored_results=pd.DataFrame(),
+    )

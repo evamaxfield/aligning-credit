@@ -660,5 +660,3 @@ def _process_plos_xml_files(  # noqa: C901
         successful_results=pd.DataFrame(per_author_results),
         errored_results=pd.DataFrame(errored_results),
     )
-
-
