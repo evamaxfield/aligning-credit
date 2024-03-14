@@ -4,7 +4,9 @@ import logging
 
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegressionCV
+import xarray as xr
 from skops import io as skio
+import numpy as np
 
 from .data import DATA_FILES_DIR
 from .types import DeveloperDetails
@@ -44,7 +46,7 @@ def _load_dev_author_em_model() -> LogisticRegressionCV:
         The author EM model
     """
     log.debug(f"Loading author EM model from {DEV_AUTHOR_EM_CLASSIFIER_PATH}")
-    return skio.load(DEV_AUTHOR_EM_CLASSIFIER_PATH, trust=True)
+    return skio.load(DEV_AUTHOR_EM_CLASSIFIER_PATH, trusted=True)
 
 
 def _load_dev_author_em_embedding_model() -> SentenceTransformer:
@@ -87,9 +89,9 @@ def match_devs_and_authors(
     """
     # If no loaded classifer, load the model
     if loaded_dev_author_em_model is None:
-        _load_dev_author_em_model()
+        clf = _load_dev_author_em_model()
     else:
-        pass
+        clf = loaded_dev_author_em_model
 
     # If no loaded embedding model, load the model
     if loaded_embedding_model is None:
@@ -97,23 +99,44 @@ def match_devs_and_authors(
     else:
         embed_model = loaded_embedding_model
 
-    # Create pairs of developers and authors and fill in the template
-    pairs: dict[str, dict[str, str]] = {}
-    pair_strs = []
-    for dev_details in devs:
-        pairs[dev_details.username] = {}
+    # Create xarray for filled templates
+    data = []
+    for dev in devs:
+        this_dev_data = []
         for author in authors:
-            filled_template = DEV_AUTHOR_EM_TEMPLATE.format(
-                dev_username=dev_details.username,
-                dev_name=dev_details.name,
-                dev_email=dev_details.email,
-                author_name=author,
-            )
-            pairs[dev_details.username][author] = filled_template
-            pair_strs.append(filled_template)
+            this_dev_data.append(DEV_AUTHOR_EM_TEMPLATE.format(dev_username=dev.username, dev_name=dev.name, dev_email=dev.email, author_name=author))
+        
+        data.append(this_dev_data)
+    
+    # Construct the array
+    arr = xr.DataArray(data, dims=("dev", "author"), coords={"dev": [dev.username for dev in devs], "author": authors})
 
-    # Create embeddings for all of the pairs
+    # Create embeddings for all of the pairs and add a new dim to the array with the dimension
     log.debug("Creating embeddings for all dev-author pairs")
-    embed_model.encode(pair_strs)
+    embeddings = embed_model.encode(arr.values.flatten())
 
-    return {}
+    # Reshape the embeddings to fit the array
+    embeddings = embeddings.reshape(len(devs), len(authors), -1)
+
+    # Make a new xarray with the embeddings
+    arr = xr.DataArray(embeddings, dims=("dev", "author", "embedding_dim"), coords={"dev": [dev.username for dev in devs], "author": authors})
+
+    # Predict the matches
+    log.debug("Predicting matches")
+    preds = clf.predict(arr.values.reshape(-1, arr.sizes["embedding_dim"]))
+
+    # Reshape the predictions to fit the array
+    preds = preds.reshape(len(devs), len(authors))
+
+    # Make a new xarray with the predictions
+    arr = xr.DataArray(preds, dims=("dev", "author"), coords={"dev": [dev.username for dev in devs], "author": authors})
+
+    # Create a dictionary of matches where the dev is the key and the author is the value
+    # Only add those pairs to the dictionary if the prediction is "match"
+    matches = {}
+    for dev in devs:
+        for author in authors:
+            if arr.sel(dev=dev.username, author=author).values == "match":
+                matches[dev.username] = author
+    
+    return matches
