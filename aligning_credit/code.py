@@ -6,9 +6,9 @@ import time
 from datetime import datetime
 
 import pandas as pd
-import requests
 from dotenv import load_dotenv
 from ghapi.all import GhApi
+from fastcore.net import HTTP404NotFoundError
 from tqdm import tqdm
 
 from . import ml
@@ -46,7 +46,7 @@ def _load_github_api_and_check_rate_limit() -> GhApi:
     return gh_api
 
 
-def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredResults:
+def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults:
     """
     Process the PLOS corpus to check for repository existance and if the repository has
     common coding language files.
@@ -66,6 +66,19 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
     # Filter out non-GitHub repositories from the dataframe
     # Log how many were filtered out
     n_non_github = len(df[df.repository_host != "github"])
+
+    # Store these in the errored results
+    errored_results = []
+    for _, row in df[df.repository_host != "github"].iterrows():
+        errored_results.append(
+            ErrorResult(
+                identifier=row.repository_name,
+                step="Repository host check",
+                error="Non-GitHub repository",
+            ).to_dict()
+        )
+
+    # Filtering out non-GitHub repositories from the dataframe
     log.info(f"Filtering out {n_non_github} non-GitHub repositories")
     df = df[df.repository_host == "github"].copy()
 
@@ -73,6 +86,18 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
     # Log how many were filtered out
     n_non_repo = len(df[df.repository_name.isna()])
     log.info(f"Filtering out {n_non_repo} organization URLs")
+
+    # Store these in the errored results
+    for _, row in df[df.repository_name.isna()].iterrows():
+        errored_results.append(
+            ErrorResult(
+                identifier=row.repository_name,
+                step="Repository name check",
+                error="Organization URL",
+            ).to_dict()
+        )
+    
+    # Filtering out non-Repository repositories from the dataframe
     df = df[~df.repository_name.isna()].copy()
 
     # Store final results
@@ -87,7 +112,7 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.5)
+        time.sleep(0.25)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -98,41 +123,42 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
 
         # Check if the repository exists
         try:
-            # Call to ecosyste.ms API
-            resp = requests.get(
-                f"https://repos.ecosyste.ms/api/v1/hosts/github/repositories/"
-                f"{repo_path}"
+            # Call to the GitHub API to check if the repository exists
+            repo_data = gh_api.repos.get(
+                owner=row.repository_owner,
+                repo=row.repository_name,
             )
-            resp.raise_for_status()
 
             # Keep some of the data
-            data = resp.json()
-            group["repository_stargazers_count"] = data["stargazers_count"]
-            group["repository_open_issues_count"] = data["open_issues_count"]
-            group["repository_forks_count"] = data["forks_count"]
-            group["repository_most_recent_push_datetime"] = data["pushed_at"]
-            group["repository_license"] = data["license"]
+            group["repository_stargazers_count"] = repo_data["stargazers_count"]
+            group["repository_open_issues_count"] = repo_data["open_issues_count"]
+            group["repository_forks_count"] = repo_data["forks_count"]
+            group["repository_most_recent_push_datetime"] = repo_data["pushed_at"]
+            group["repository_license"] = (
+                repo_data["license"].get("name", None)
+                if repo_data["license"] is not None
+                else None
+            )
             group["repository_data_cache_datetime"] = datetime.now().isoformat()
 
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                errored_results.append(
-                    ErrorResult(
-                        identifier=repo_path,
-                        step="Repository existance check",
-                        error="Repository not found",
-                    ).to_dict()
-                )
-                continue
-            else:
-                errored_results.append(
-                    ErrorResult(
-                        identifier=repo_path,
-                        step="Repository existance check",
-                        error=f"Error with Ecosyste.ms API service: {e}",
-                    ).to_dict()
-                )
-                continue
+        except HTTP404NotFoundError as e:
+            errored_results.append(
+                ErrorResult(
+                    identifier=repo_path,
+                    step="Repository existance check",
+                    error="Repository not found",
+                ).to_dict()
+            )
+            continue
+        except Exception as e:
+            errored_results.append(
+                ErrorResult(
+                    identifier=repo_path,
+                    step="Repository existance check",
+                    error=f"Error with GitHub API: {e}",
+                ).to_dict()
+            )
+            continue
 
         # Check repository languages
         try:
@@ -145,7 +171,7 @@ def _filter_repositories_in_plos_dataset(df: pd.DataFrame) -> SuccessAndErroredR
                 ErrorResult(
                     identifier=repo_path,
                     step="Repository language check",
-                    error=f"Error with GitHub API service: {e}",
+                    error=f"Error with GitHub API: {e}",
                 ).to_dict()
             )
             continue
@@ -227,7 +253,7 @@ def _get_repository_contributors(
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.5)
+        time.sleep(0.25)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first

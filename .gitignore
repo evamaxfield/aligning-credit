@@ -128,3 +128,4 @@ index_files/
 index.tex
 
 # Project specific
+aligning_credit/data/files/*.parquet

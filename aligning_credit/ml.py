@@ -123,7 +123,7 @@ def match_devs_and_authors(
 
     # Create embeddings for all of the pairs
     log.debug("Creating embeddings for all dev-author pairs")
-    embeddings = embed_model.encode(arr.values.flatten())
+    embeddings = embed_model.encode(arr.values.flatten(), show_progress_bar=False)
 
     # Reshape the embeddings to fit the array
     embeddings = embeddings.reshape(len(devs), len(authors), -1)

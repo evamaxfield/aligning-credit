@@ -451,6 +451,12 @@ def _get_authors(  # noqa: C901
     # <addr-line>UPR “Chronotherapy, Cancer and Transplantation”, Medical School, Paris-Saclay University, Medical Oncology Department, Paul Brousse Hospital, Villejuif, France</addr-line>  # noqa: E501
     # </aff>
     # Get the first contrib-group
+
+    # TODO: Add ORCID parsing
+    # Example: /Users/evamaxfield/micromamba/envs/aligning-credit/lib/python3.12/site-packages/allofplos/allofplos_xml/journal.pntd.0011695.xml  # noqa: E501
+    # TODO: Add author position parsing
+    # TODO: Add author "equal contrib" parsing
+
     contrib_group = root.find(".//contrib-group")
     if contrib_group is None:
         return ErrorResult(
