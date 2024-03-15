@@ -113,7 +113,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.25)
+        time.sleep(0.75)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -256,7 +256,7 @@ def _get_repository_contributors(
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.25)
+        time.sleep(0.75)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -297,7 +297,7 @@ def _get_repository_contributors(
         ):
             try:
                 # Sleep to be nice to APIs
-                time.sleep(0.25)
+                time.sleep(0.75)
 
                 user = gh_api.users.get_by_username(contributor.login)
                 successful_results.append(
