@@ -2,14 +2,13 @@
 
 import logging
 
+import numpy as np
+import pandas as pd
 import typer
 
+from aligning_credit import code, plos
 from aligning_credit.bin.typer_utils import setup_logger
-from aligning_credit import plos, code
 from aligning_credit.data import DATA_FILES_DIR
-import numpy as np
-
-import pandas as pd
 
 ###############################################################################
 
@@ -56,7 +55,7 @@ def filter_plos_xml(
         sample=None if sample == -1 else sample,
         random_state=random_state,
     )
-    
+
     # Filter the XML files
     results = plos._process_plos_xml_files(df)
 
@@ -70,10 +69,14 @@ def filter_plos_xml(
     print("Results from XML Filtering:")
     print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
     print()
-    print(f"Total number of author-paper contributions: {len(results.successful_results)}")
+    print(
+        f"Total number of author-paper contributions: {len(results.successful_results)}"
+    )
     print()
     print("Repo Hosts:")
-    print(results.successful_results.groupby("doi").first().repository_host.value_counts())
+    print(
+        results.successful_results.groupby("doi").first().repository_host.value_counts()
+    )
     print()
     print("Disciplines:")
     print(results.successful_results.groupby("doi").first().disciplines.value_counts())
@@ -89,6 +92,7 @@ def filter_plos_xml(
     print()
     print("Error Values:")
     print(results.errored_results["error"].value_counts())
+
 
 ###############################################################################
 
@@ -108,7 +112,9 @@ def filter_repositories(
     # Sample if desired
     if sample != -1:
         np.random.seed(random_state)
-        dois = np.random.choice(filtered_plos_corpus.doi.unique(), sample, replace=False)
+        dois = np.random.choice(
+            filtered_plos_corpus.doi.unique(), sample, replace=False
+        )
         filtered_plos_corpus = filtered_plos_corpus[filtered_plos_corpus.doi.isin(dois)]
 
     # Filter the repositories
@@ -124,7 +130,9 @@ def filter_repositories(
     print("Results from Repository Filtering:")
     print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
     print()
-    print(f"Total number of author-paper contributions: {len(results.successful_results)}")
+    print(
+        f"Total number of author-paper contributions: {len(results.successful_results)}"
+    )
     print()
     print("Distribution of Stargazers:")
     print(
@@ -175,7 +183,9 @@ def get_repository_contributors(
     # Sample if desired
     if sample != -1:
         np.random.seed(random_state)
-        dois = np.random.choice(filtered_plos_corpus.doi.unique(), sample, replace=False)
+        dois = np.random.choice(
+            filtered_plos_corpus.doi.unique(), sample, replace=False
+        )
         filtered_plos_corpus = filtered_plos_corpus[filtered_plos_corpus.doi.isin(dois)]
 
     # Get the repository contributors
@@ -191,7 +201,9 @@ def get_repository_contributors(
     print("Results from Repository Contributors:")
     print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
     print()
-    print(f"Total number of author-paper contributions: {len(results.successful_results)}")
+    print(
+        f"Total number of author-paper contributions: {len(results.successful_results)}"
+    )
     print()
     print("Distribution of Contributors:")
     print(results.successful_results.groupby("doi").apply(len).describe())

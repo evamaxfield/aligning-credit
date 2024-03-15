@@ -7,8 +7,8 @@ from datetime import datetime
 
 import pandas as pd
 from dotenv import load_dotenv
-from ghapi.all import GhApi
 from fastcore.net import HTTP404NotFoundError
+from ghapi.all import GhApi
 from tqdm import tqdm
 
 from . import ml
@@ -96,7 +96,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
                 error="Organization URL",
             ).to_dict()
         )
-    
+
     # Filtering out non-Repository repositories from the dataframe
     df = df[~df.repository_name.isna()].copy()
 
@@ -141,7 +141,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
             )
             group["repository_data_cache_datetime"] = datetime.now().isoformat()
 
-        except HTTP404NotFoundError as e:
+        except HTTP404NotFoundError:
             errored_results.append(
                 ErrorResult(
                     identifier=repo_path,
