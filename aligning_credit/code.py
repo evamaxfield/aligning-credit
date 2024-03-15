@@ -65,14 +65,16 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
     # Filter out non-GitHub repositories from the dataframe
     # Log how many were filtered out
-    n_non_github = len(df[df.repository_host != "github"])
+    n_non_github = len(df[df.repository_host.str.lower() != "github"])
 
     # Store these in the errored results
     errored_results = []
-    for _, row in df[df.repository_host != "github"].iterrows():
+    for _, row in df[df.repository_host.str.lower() != "github"].iterrows():
         errored_results.append(
             ErrorResult(
-                identifier=row.repository_name,
+                identifier=(
+                    f"{row.repository_host}/{row.repository_owner}/{row.repository_name}"
+                ),
                 step="Repository host check",
                 error="Non-GitHub repository",
             ).to_dict()
@@ -80,7 +82,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
     # Filtering out non-GitHub repositories from the dataframe
     log.info(f"Filtering out {n_non_github} non-GitHub repositories")
-    df = df[df.repository_host == "github"].copy()
+    df = df[df.repository_host.str.lower() == "github"].copy()
 
     # Filtering out non-Repository repositories from the dataframe
     # Log how many were filtered out
@@ -91,7 +93,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
     for _, row in df[df.repository_name.isna()].iterrows():
         errored_results.append(
             ErrorResult(
-                identifier=row.repository_name,
+                identifier=f"{row.repository_owner}/{row.repository_name}",
                 step="Repository name check",
                 error="Organization URL",
             ).to_dict()
@@ -102,7 +104,6 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
     # Store final results
     successful_results = []
-    errored_results = []
 
     # Iter through corpus, grouping by DOI
     # (as there are multiple rows with all the same data except authors)
@@ -119,7 +120,9 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         row = group.iloc[0]
 
         # Construct the repo path
-        repo_path = f"{row.repository_owner}/{row.repository_name}"
+        repo_path = (
+            f"{row.repository_host}/{row.repository_owner}/{row.repository_name}"
+        )
 
         # Check if the repository exists
         try:
@@ -305,6 +308,12 @@ def _get_repository_contributors(
                         "repository_contributor_username": user.login,
                         "repository_contributor_name": user.name,
                         "repository_contributor_email": user.email,
+                        "repository_contributor_contributions": (
+                            contributor.contributions
+                        ),
+                        "repository_contributor_data_cache_datetime": (
+                            datetime.now().isoformat()
+                        ),
                     }
                 )
             except Exception as e:
@@ -389,6 +398,10 @@ def _match_repository_contributors_to_authors(
                         contributor_group.repository_contributor_username
                         == dev_username
                     ].repository_contributor_email.iloc[0],
+                    "repository_contributor_contributions": contributor_group[
+                        contributor_group.repository_contributor_username
+                        == dev_username
+                    ].repository_contributor_contributions.iloc[0],
                     "author_dev_classification": AuthorDevClassification.dev_author,
                 }
             )
@@ -413,6 +426,9 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_email": (
                             row.repository_contributor_email
                         ),
+                        "repository_contributor_contributions": (
+                            row.repository_contributor_contributions
+                        ),
                         "author_dev_classification": (
                             AuthorDevClassification.dev_not_author
                         ),
@@ -430,6 +446,7 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_username": None,
                         "repository_contributor_name": None,
                         "repository_contributor_email": None,
+                        "repository_contributor_contributions": None,
                         "author_dev_classification": (
                             AuthorDevClassification.author_not_dev
                         ),

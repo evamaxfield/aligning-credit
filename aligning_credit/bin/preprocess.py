@@ -78,20 +78,18 @@ def filter_plos_xml(
         results.successful_results.groupby("doi").first().repository_host.value_counts()
     )
     print()
-    print("Disciplines:")
-    print(results.successful_results.groupby("doi").first().disciplines.value_counts())
-    print()
     print("-" * 80)
     print()
 
     # Error Stats
-    print("Errored Results:")
-    print()
-    print("Error Steps:")
-    print(results.errored_results["step"].value_counts())
-    print()
-    print("Error Values:")
-    print(results.errored_results["error"].value_counts())
+    if len(results.errored_results) > 0:
+        print("Errored Results:")
+        print()
+        print("Error Steps:")
+        print(results.errored_results["step"].value_counts())
+        print()
+        print("Error Values:")
+        print(results.errored_results["error"].value_counts())
 
 
 ###############################################################################
@@ -159,13 +157,14 @@ def filter_repositories(
     print()
 
     # Error Stats
-    print("Errored Results:")
-    print()
-    print("Error Steps:")
-    print(results.errored_results["step"].value_counts())
-    print()
-    print("Error Values:")
-    print(results.errored_results["error"].value_counts())
+    if len(results.errored_results) > 0:
+        print("Errored Results:")
+        print()
+        print("Error Steps:")
+        print(results.errored_results["step"].value_counts())
+        print()
+        print("Error Values:")
+        print(results.errored_results["error"].value_counts())
 
 
 @app.command()
@@ -201,9 +200,7 @@ def get_repository_contributors(
     print("Results from Repository Contributors:")
     print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
     print()
-    print(
-        f"Total number of author-paper contributions: {len(results.successful_results)}"
-    )
+    print(f"Total number of contributors: {len(results.successful_results)}")
     print()
     print("Distribution of Contributors:")
     print(results.successful_results.groupby("doi").apply(len).describe())
@@ -249,12 +246,42 @@ def match_repository_contributors_to_authors(
     print("Results from Matching Repository Contributors to Authors:")
     print(f"Number of successful papers: {df.doi.nunique()}")
     print()
-    print(f"Total number of project contributions (author or contributor): {len(df)}")
+    print(f"Total number of project contributors (authors or devs): {len(df)}")
     print()
     print("Distribution of Author-Dev Classifications:")
     print(df.author_dev_classification.value_counts())
     print()
     print("-" * 80)
+    print()
+
+
+@app.command()
+def all_steps(
+    sample: int = -1,
+    random_state: int = 12,
+    debug: bool = False,
+) -> None:
+    # Setup logger
+    setup_logger(debug=debug)
+
+    # Filter PLOS XML
+    log.info("Beginning PLOS XML Filtering")
+    filter_plos_xml(sample=sample, random_state=random_state, debug=debug)
+    print()
+
+    # Filter Repositories
+    log.info("Beginning Repository Filtering")
+    filter_repositories(debug=debug)
+    print()
+
+    # Get Repository Contributors
+    log.info("Beginning Repository Contributors")
+    get_repository_contributors(debug=debug)
+    print()
+
+    # Match Repository Contributors to Authors
+    log.info("Beginning Matching Repository Contributors to Authors")
+    match_repository_contributors_to_authors(debug=debug)
     print()
 
 
