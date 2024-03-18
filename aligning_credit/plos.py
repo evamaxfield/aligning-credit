@@ -60,6 +60,9 @@ def _load_unprocessed_corpus(
 @dataclass
 class Author(DataClassJsonMixin):
     full_name: str
+    orcid: str | None
+    position: str | None
+    equal_contrib: bool
     email: str | None
     affliation: str | None
     roles: str | None
@@ -406,57 +409,82 @@ def _get_authors(  # noqa: C901
     # Get the authors
     # Example:
     # <contrib-group>
-    # <contrib contrib-type="author" equal-contrib="yes" xlink:type="simple">
+    # <contrib contrib-type="author" xlink:type="simple">
+    # <contrib-id authenticated="true" contrib-id-type="orcid">https://orcid.org/0000-0002-4052-3645</contrib-id>  # noqa
     # <name name-style="western">
-    # <surname>Vlachou</surname> <given-names>Denise</given-names></name>
-    # <role content-type="http://credit.niso.org/contributor-roles/data-curation/">Data curation</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/methodology/">Methodology</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/software/">Software</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/validation/">Validation</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/writing-original-draft/">Writing - original draft</role>  # noqa: E501
+    # <surname>Vélez</surname>
+    # <given-names>Jessica M.</given-names>
+    # </name>
+    # <role content-type="https://casrai.org/credit/">Conceptualization</role>
+    # <role content-type="https://casrai.org/credit/">Data curation</role>
+    # <role content-type="https://casrai.org/credit/">Formal analysis</role>
+    # <role content-type="https://casrai.org/credit/">Investigation</role>
+    # <role content-type="https://casrai.org/credit/">Methodology</role>
+    # <role content-type="https://casrai.org/credit/">Visualization</role>
+    # <role content-type="https://casrai.org/credit/">Writing – original draft</role>  # noqa
+    # <role content-type="https://casrai.org/credit/">Writing – review &amp; editing</role>  # noqa
     # <xref ref-type="aff" rid="aff001"><sup>1</sup></xref>
-    # <xref ref-type="fn" rid="currentaff001"><sup>¤a</sup></xref>
+    # <xref ref-type="aff" rid="aff002"><sup>2</sup></xref>
     # </contrib>
-    # <contrib contrib-type="author" equal-contrib="yes" xlink:type="simple">
+    # <contrib contrib-type="author" xlink:type="simple">
     # <name name-style="western">
-    # <surname>Veretennikova</surname> <given-names>Maria</given-names></name>
-    # <role content-type="http://credit.niso.org/contributor-roles/data-curation/">Data curation</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/investigation/">Investigation</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/software/">Software</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/validation/">Validation</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/visualization/">Visualization</role>  # noqa: E501
-    # <role content-type="http://credit.niso.org/contributor-roles/writing-review-editing/">Writing - review &amp; editing</role>  # noqa: E501
+    # <surname>Morris</surname>
+    # <given-names>Reese M.</given-names>
+    # </name>
+    # <role content-type="https://casrai.org/credit/">Methodology</role>
     # <xref ref-type="aff" rid="aff001"><sup>1</sup></xref>
-    # <xref ref-type="fn" rid="currentaff002"><sup>¤b</sup></xref>
     # </contrib>
-    # AND LATER
-    # <aff id="aff001">
-    # <label>1</label>
-    # <addr-line>Mathematics Institute &amp; Zeeman Institute for Systems Biology and Infectious Disease Epidemiology Research, University of Warwick, Coventry, United Kingdom</addr-line>  # noqa: E501
-    # </aff>
-    # <aff id="aff002">
-    # <label>2</label>
-    # <addr-line>Division of Biomedical Sciences, Warwick Medical School, University of Warwick, Coventry, United Kingdom</addr-line>  # noqa: E501
-    # </aff>
-    # <aff id="aff003">
-    # <label>3</label>
-    # <addr-line>Odette Cancer Centre, Sunnybrook Health Sciences Centre, Toronto, Ontario, Canada</addr-line>  # noqa: E501
-    # </aff>
-    # <aff id="aff004">
-    # <label>4</label>
-    # <addr-line>Department of Statistics, University of Warwick, Coventry, United Kingdom</addr-line>  # noqa: E501
-    # </aff>
-    # <aff id="aff005">
-    # <label>5</label>
-    # <addr-line>UPR “Chronotherapy, Cancer and Transplantation”, Medical School, Paris-Saclay University, Medical Oncology Department, Paul Brousse Hospital, Villejuif, France</addr-line>  # noqa: E501
-    # </aff>
+    # <contrib contrib-type="author" xlink:type="simple">
+    # <name name-style="western">
+    # <surname>Vilgalys</surname>
+    # <given-names>Rytas</given-names>
+    # </name>
+    # <role content-type="https://casrai.org/credit/">Conceptualization</role>
+    # <role content-type="https://casrai.org/credit/">Formal analysis</role>
+    # <role content-type="https://casrai.org/credit/">Methodology</role>
+    # <role content-type="https://casrai.org/credit/">Writing – review &amp; editing</role>  # noqa
+    # <xref ref-type="aff" rid="aff003"><sup>3</sup></xref>
+    # </contrib>
+    # <contrib contrib-type="author" xlink:type="simple">
+    # <name name-style="western">
+    # <surname>Labbé</surname>
+    # <given-names>Jessy</given-names>
+    # </name>
+    # <role content-type="https://casrai.org/credit/">Conceptualization</role>
+    # <role content-type="https://casrai.org/credit/">Writing – review &amp; editing</role>  # noqa
+    # <xref ref-type="aff" rid="aff001"><sup>1</sup></xref>
+    # </contrib>
+    # <contrib contrib-type="author" corresp="yes" xlink:type="simple">
+    # <contrib-id authenticated="true" contrib-id-type="orcid">https://orcid.org/0000-0001-8759-2448</contrib-id>  # noqa
+    # <name name-style="western">
+    # <surname>Schadt</surname>
+    # <given-names>Christopher W.</given-names>
+    # </name>
+    # <role content-type="https://casrai.org/credit/">Conceptualization</role>
+    # <role content-type="https://casrai.org/credit/">Formal analysis</role>
+    # <role content-type="https://casrai.org/credit/">Funding acquisition</role>
+    # <role content-type="https://casrai.org/credit/">Investigation</role>
+    # <role content-type="https://casrai.org/credit/">Methodology</role>
+    # <role content-type="https://casrai.org/credit/">Project administration</role>  # noqa
+    # <role content-type="https://casrai.org/credit/">Resources</role>
+    # <role content-type="https://casrai.org/credit/">Software</role>
+    # <role content-type="https://casrai.org/credit/">Supervision</role>
+    # <role content-type="https://casrai.org/credit/">Validation</role>
+    # <role content-type="https://casrai.org/credit/">Visualization</role>
+    # <role content-type="https://casrai.org/credit/">Writing – original draft</role>  # noqa
+    # <role content-type="https://casrai.org/credit/">Writing – review &amp; editing</role>  # noqa
+    # <xref ref-type="aff" rid="aff001"><sup>1</sup></xref>
+    # <xref ref-type="aff" rid="aff002"><sup>2</sup></xref>
+    # <xref ref-type="aff" rid="aff004"><sup>4</sup></xref>
+    # <xref ref-type="corresp" rid="cor001">*</xref>
+    # </contrib>
+    # </contrib-group>
+    # <aff id="aff001"><label>1</label> <addr-line>Biosciences Division, Oak Ridge National Laboratory, Oak Ridge, TN, United States of America</addr-line></aff>  # noqa
+    # <aff id="aff002"><label>2</label> <addr-line>The Bredesen Center for Interdisciplinary Research and Graduate Education, University of Tennessee, Knoxville, TN, United States of America</addr-line></aff>  # noqa
+    # <aff id="aff003"><label>3</label> <addr-line>Biology Department, Duke University, Raleigh, NC, United States of America</addr-line></aff>  # noqa
+    # <aff id="aff004"><label>4</label> <addr-line>Dept of Microbiology, University of Tennessee, Knoxville, TN, United States of America</addr-line></aff>  # noqa
+
     # Get the first contrib-group
-
-    # TODO: Add ORCID parsing
-    # Example: /Users/evamaxfield/micromamba/envs/aligning-credit/lib/python3.12/site-packages/allofplos/allofplos_xml/journal.pntd.0011695.xml  # noqa: E501
-    # TODO: Add author position parsing
-    # TODO: Add author "equal contrib" parsing
-
     contrib_group = root.find(".//contrib-group")
     if contrib_group is None:
         return ErrorResult(
@@ -474,7 +502,7 @@ def _get_authors(  # noqa: C901
         )
 
     authors = []
-    for author in author_containers:
+    for i, author in enumerate(author_containers):
         given_names_container = author.find(".//given-names")
         surname_container = author.find(".//surname")
         if (
@@ -488,22 +516,26 @@ def _get_authors(  # noqa: C901
                 step="Authors Parsing",
                 error="No author name found",
             )
-
         full_name = f"{given_names_container.text} {surname_container.text}"
 
         email_container = author.find(".//email")
         affliation_xref_container = author.find(".//xref[@ref-type='aff']")
+        orcid_id_container = author.find(".//contrib-id[@contrib-id-type='orcid']")
         if (
             email_container is None
             or affliation_xref_container is None
             or email_container.text is None
             or "rid" not in affliation_xref_container.attrib
+            or orcid_id_container is None
+            or orcid_id_container.text is None
         ):
             email = None
             affliation = None
+            orcid_id = None
         else:
             email = email_container.text
             affliation_id = affliation_xref_container.attrib["rid"]
+            orcid_id = orcid_id_container.text.split("/")[-1]
 
             # Get the affliation
             affliation_container = root.find(f".//aff[@id='{affliation_id}']")
@@ -517,6 +549,23 @@ def _get_authors(  # noqa: C901
                 else:
                     affliation = addr_line_container.text
 
+        # Determine the author position and equal contribution
+        if i == 0:
+            position = "first"
+        elif i == len(author_containers) - 1:
+            position = "last"
+        else:
+            position = "middle"
+
+        # Check for equal contribution
+        # Example:
+        # <contrib contrib-type="author" equal-contrib="yes">
+        equal_contrib = False
+        if "equal-contrib" in author.attrib and author.attrib["equal-contrib"] == "yes":
+            equal_contrib = True
+            position = "first"
+
+        # Get the roles
         roles_containers = author.findall(".//role")
         if len(roles_containers) == 0:
             roles = None
@@ -530,6 +579,9 @@ def _get_authors(  # noqa: C901
         authors.append(
             Author(
                 full_name=full_name,
+                orcid=orcid_id,
+                position=position,
+                equal_contrib=equal_contrib,
                 email=email,
                 affliation=affliation,
                 roles=roles,
@@ -655,6 +707,9 @@ def _process_plos_xml_files(  # noqa: C901
                     "funding_sources": result.funding_sources,
                     "publish_date": result.publish_date,
                     "full_name": author.full_name,
+                    "orcid": author.orcid,
+                    "position": author.position,
+                    "equal_contrib": author.equal_contrib,
                     "email": author.email,
                     "affliation": author.affliation,
                     "roles": author.roles,
