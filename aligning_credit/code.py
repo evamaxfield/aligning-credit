@@ -63,10 +63,6 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
     """
     gh_api = _load_github_api_and_check_rate_limit()
 
-    # Filter out non-GitHub repositories from the dataframe
-    # Log how many were filtered out
-    n_non_github = len(df[df.repository_host.str.lower() != "github"])
-
     # Store these in the errored results
     errored_results = []
     for _, row in df[df.repository_host.str.lower() != "github"].iterrows():
@@ -81,13 +77,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         )
 
     # Filtering out non-GitHub repositories from the dataframe
-    log.info(f"Filtering out {n_non_github} non-GitHub repositories")
     df = df[df.repository_host.str.lower() == "github"].copy()
-
-    # Filtering out non-Repository repositories from the dataframe
-    # Log how many were filtered out
-    n_non_repo = len(df[df.repository_name.isna()])
-    log.info(f"Filtering out {n_non_repo} organization URLs")
 
     # Store these in the errored results
     for _, row in df[df.repository_name.isna()].iterrows():
@@ -332,9 +322,9 @@ def _get_repository_contributors(
 
 
 class AuthorDevClassification:
-    dev_author = "dev_author"
-    dev_not_author = "dev_not_author"
-    author_not_dev = "author_not_dev"
+    author_dev = "Author and Dev"
+    dev = "Dev"
+    author = "Author"
 
 
 def _match_repository_contributors_to_authors(
@@ -402,7 +392,7 @@ def _match_repository_contributors_to_authors(
                         contributor_group.repository_contributor_username
                         == dev_username
                     ].repository_contributor_contributions.iloc[0],
-                    "author_dev_classification": AuthorDevClassification.dev_author,
+                    "author_dev_classification": AuthorDevClassification.author_dev,
                 }
             )
 
@@ -413,6 +403,9 @@ def _match_repository_contributors_to_authors(
                         **author_group.iloc[0].to_dict(),
                         # Remove author details
                         "full_name": None,
+                        "orcid": None,
+                        "position": None,
+                        "equal_contrib": None,
                         "email": None,
                         "affliation": None,
                         "roles": None,
@@ -429,9 +422,7 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_contributions": (
                             row.repository_contributor_contributions
                         ),
-                        "author_dev_classification": (
-                            AuthorDevClassification.dev_not_author
-                        ),
+                        "author_dev_classification": (AuthorDevClassification.dev),
                     }
                 )
 
@@ -447,9 +438,7 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_name": None,
                         "repository_contributor_email": None,
                         "repository_contributor_contributions": None,
-                        "author_dev_classification": (
-                            AuthorDevClassification.author_not_dev
-                        ),
+                        "author_dev_classification": (AuthorDevClassification.author),
                     }
                 )
 
