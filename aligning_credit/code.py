@@ -321,10 +321,10 @@ def _get_repository_contributors(
     )
 
 
-class AuthorDevClassification:
-    author_dev = "Author and Dev"
-    dev = "Dev"
-    author = "Author"
+class KnownMemberDevClassification:
+    known_member_dev = "Known Member and Developer"
+    dev = "Developer"
+    known_member = "Known Member"
 
 
 def _match_repository_contributors_to_authors(
@@ -392,7 +392,9 @@ def _match_repository_contributors_to_authors(
                         contributor_group.repository_contributor_username
                         == dev_username
                     ].repository_contributor_contributions.iloc[0],
-                    "author_dev_classification": AuthorDevClassification.author_dev,
+                    "known_member_dev_classification": (
+                        KnownMemberDevClassification.known_member_dev
+                    ),
                 }
             )
 
@@ -422,7 +424,9 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_contributions": (
                             row.repository_contributor_contributions
                         ),
-                        "author_dev_classification": (AuthorDevClassification.dev),
+                        "known_member_dev_classification": (
+                            KnownMemberDevClassification.dev
+                        ),
                     }
                 )
 
@@ -438,7 +442,9 @@ def _match_repository_contributors_to_authors(
                         "repository_contributor_name": None,
                         "repository_contributor_email": None,
                         "repository_contributor_contributions": None,
-                        "author_dev_classification": (AuthorDevClassification.author),
+                        "known_member_dev_classification": (
+                            KnownMemberDevClassification.known_member
+                        ),
                     }
                 )
 

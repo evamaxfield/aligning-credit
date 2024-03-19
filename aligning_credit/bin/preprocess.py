@@ -17,20 +17,26 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 # Filtering PLOS XML
-FILTERED_PLOS_SUCCESS_FILE = DATA_FILES_DIR / "filtered-plos-corpus.parquet"
-FILTERED_PLOS_ERRORED_FILE = DATA_FILES_DIR / "filtered-plos-corpus-errored.parquet"
+FILTERED_PLOS_SUCCESS_FILE = DATA_FILES_DIR / "filtered-corpus.parquet"
+FILTERED_PLOS_ERRORED_FILE = DATA_FILES_DIR / "filtered-corpus-errored.parquet"
+
+# Extracting Acknowledged Members
+ACKNOWLEDGED_MEMBERS_SUCCESS_FILE = DATA_FILES_DIR / "acknowledged-members.parquet"
+ACKNOWLEDGED_MEMBERS_ERRORED_FILE = (
+    DATA_FILES_DIR / "acknowledged-members-errored.parquet"
+)
 
 # Repository checking
-REPO_CHECK_SUCCESS_FILE = DATA_FILES_DIR / "repo-check-plos-corpus.parquet"
-REPO_CHECK_ERRORED_FILE = DATA_FILES_DIR / "repo-check-plos-errored.parquet"
+REPO_CHECK_SUCCESS_FILE = DATA_FILES_DIR / "repo-check-corpus.parquet"
+REPO_CHECK_ERRORED_FILE = DATA_FILES_DIR / "repo-check-errored.parquet"
 
 # Repository contributors
 REPO_CONTRIB_SUCCESS_FILE = DATA_FILES_DIR / "repo-contributors-successful.parquet"
 REPO_CONTRIB_ERRORED_FILE = DATA_FILES_DIR / "repo-contributors-errored.parquet"
 
-# Matched contributors and authors
-MATCHED_REPO_CONTRIB_TO_AUTHORS_FILE = (
-    DATA_FILES_DIR / "matched-repo-contributors-to-authors.parquet"
+# Matched contributors and paper members
+MATCHED_REPO_CONTRIB_TO_PAPER_MEMBERS_FILE = (
+    DATA_FILES_DIR / "matched-repo-contributors-to-paper-members.parquet"
 )
 
 
@@ -92,7 +98,56 @@ def filter_plos_xml(
         print(results.errored_results["error"].value_counts())
 
 
-###############################################################################
+@app.command()
+def extract_acknowledged_members(
+    sample: int = -1,
+    random_state: int = 12,
+    debug: bool = False,
+) -> None:
+    # Setup logger
+    setup_logger(debug=debug)
+
+    # Load prior results
+    filtered_plos_corpus = pd.read_parquet(FILTERED_PLOS_SUCCESS_FILE)
+
+    # Sample if desired
+    if sample != -1:
+        np.random.seed(random_state)
+        dois = np.random.choice(
+            filtered_plos_corpus.doi.unique(), sample, replace=False
+        )
+        filtered_plos_corpus = filtered_plos_corpus[filtered_plos_corpus.doi.isin(dois)]
+
+    # Extract the acknowledged members
+    results = plos._extract_acknowledged_members(filtered_plos_corpus)
+
+    # Store the results
+    log.info(f"Storing successful results to '{ACKNOWLEDGED_MEMBERS_SUCCESS_FILE}'")
+    results.successful_results.to_parquet(ACKNOWLEDGED_MEMBERS_SUCCESS_FILE)
+    log.info(f"Storing errored results to '{ACKNOWLEDGED_MEMBERS_ERRORED_FILE}'")
+    results.errored_results.to_parquet(ACKNOWLEDGED_MEMBERS_ERRORED_FILE)
+
+    # Success Stats
+    print("Results from Acknowledged Members Extraction:")
+    print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
+    print()
+    print("Distribution of Member Positions:")
+    print(results.successful_results["position"].value_counts())
+    print()
+    print("-" * 80)
+    print()
+
+    # Error Stats
+    if len(results.errored_results) > 0:
+        print("Errored Results:")
+        print()
+        print("Error Steps:")
+        print(results.errored_results["step"].value_counts())
+        print()
+        print("Error Values:")
+        print(results.errored_results["error"].value_counts())
+    else:
+        print("No errored results!")
 
 
 @app.command()
@@ -105,7 +160,7 @@ def filter_repositories(
     setup_logger(debug=debug)
 
     # Load prior results
-    filtered_plos_corpus = pd.read_parquet(FILTERED_PLOS_SUCCESS_FILE)
+    filtered_plos_corpus = pd.read_parquet(ACKNOWLEDGED_MEMBERS_SUCCESS_FILE)
 
     # Sample if desired
     if sample != -1:
@@ -129,7 +184,7 @@ def filter_repositories(
     print(f"Number of successful papers: {results.successful_results.doi.nunique()}")
     print()
     print(
-        f"Total number of author-paper contributions: {len(results.successful_results)}"
+        f"Total number of member-paper contributions: {len(results.successful_results)}"
     )
     print()
     print("Distribution of Stargazers:")
@@ -239,8 +294,10 @@ def match_repository_contributors_to_authors(
     )
 
     # Store the results
-    log.info(f"Storing matched results to '{MATCHED_REPO_CONTRIB_TO_AUTHORS_FILE}'")
-    df.to_parquet(MATCHED_REPO_CONTRIB_TO_AUTHORS_FILE)
+    log.info(
+        f"Storing matched results to '{MATCHED_REPO_CONTRIB_TO_PAPER_MEMBERS_FILE}'"
+    )
+    df.to_parquet(MATCHED_REPO_CONTRIB_TO_PAPER_MEMBERS_FILE)
 
     # Stats
     print("Results from Matching Repository Contributors to Authors:")
@@ -248,8 +305,8 @@ def match_repository_contributors_to_authors(
     print()
     print(f"Total number of project contributors (authors or devs): {len(df)}")
     print()
-    print("Distribution of Author-Dev Classifications:")
-    print(df.author_dev_classification.value_counts())
+    print("Distribution of Known-Member-Dev Classifications:")
+    print(df.known_member_dev_classification.value_counts())
     print()
     print("-" * 80)
     print()
@@ -267,6 +324,11 @@ def all_steps(
     # Filter PLOS XML
     log.info("Beginning PLOS XML Filtering")
     filter_plos_xml(sample=sample, random_state=random_state, debug=debug)
+    print()
+
+    # Extract Acknowledged Members
+    log.info("Beginning Acknowledged Members Extraction")
+    extract_acknowledged_members(debug=debug)
     print()
 
     # Filter Repositories

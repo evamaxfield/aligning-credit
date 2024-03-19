@@ -11,6 +11,7 @@ import tldextract
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from dataclasses_json import DataClassJsonMixin
 from tqdm import tqdm
+from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 
 from .types import ErrorResult, SuccessAndErroredResults
 from .utils.code_hosts import CodeHostResult, parse_code_host_url
@@ -719,5 +720,91 @@ def _process_plos_xml_files(  # noqa: C901
     # Return the results
     return SuccessAndErroredResults(
         successful_results=pd.DataFrame(per_author_results),
+        errored_results=pd.DataFrame(errored_results),
+    )
+
+
+def _extract_acknowledged_members(
+    df: pd.DataFrame,
+) -> SuccessAndErroredResults:
+    # Load the tokenizer and model
+    tokenizer = AutoTokenizer.from_pretrained("Jean-Baptiste/roberta-large-ner-english")
+    model = AutoModelForTokenClassification.from_pretrained(
+        "Jean-Baptiste/roberta-large-ner-english"
+    )
+
+    # Construct the pipeline
+    nlp = pipeline(
+        "ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple"
+    )
+
+    # Iterate over DOI groups and extract acknowledged members
+    acknowledged_members = []
+    errored_results = []
+    for doi, group in tqdm(
+        df.groupby("doi"),
+        desc="Extracting Acknowledged Members",
+        total=len(df.doi.unique()),
+    ):
+        # Get first row
+        row = group.iloc[0]
+
+        # Skip if no acknowledgement statement
+        if row.acknowledgement_statement is None:
+            continue
+
+        # Extract entities
+        try:
+            entities = nlp(row.acknowledgement_statement)
+        except Exception as e:
+            errored_results.append(
+                ErrorResult(
+                    identifier=doi,
+                    step="NER",
+                    error=str(e),
+                ).to_dict()
+            )
+            continue
+
+        # Extract acknowledged members
+        for entity in entities:
+            if entity["entity_group"] == "PER":
+                # Clean the name
+                name = entity["word"].strip()
+                if len(name) < 3:
+                    continue
+
+                # Add member
+                acknowledged_members.append(
+                    {
+                        **row.to_dict(),
+                        # Remove author details
+                        "full_name": name,
+                        "orcid": None,
+                        "position": "acknowledgements",
+                        "equal_contrib": None,
+                        "email": None,
+                        "affliation": None,
+                        "roles": None,
+                    }
+                )
+
+    # Concat the results
+    acknowledged_members_df = pd.concat(
+        [df, pd.DataFrame(acknowledged_members)],
+        ignore_index=True,
+    )
+
+    # Drop duplicates on doi and full_name
+    # Sometimes acknowledgements statements
+    # thank specific members of the already known team
+    acknowledged_members_df = acknowledged_members_df.drop_duplicates(
+        subset=["doi", "full_name"],
+        keep="first",
+    )
+
+    # Return the results
+    return SuccessAndErroredResults(
+        successful_results=acknowledged_members_df,
         errored_results=pd.DataFrame(errored_results),
     )
