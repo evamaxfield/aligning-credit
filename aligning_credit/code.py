@@ -108,9 +108,6 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         desc="Checking repository details",
         total=df.doi.nunique(),
     ):
-        # Sleep to be nice to APIs
-        time.sleep(0.78)
-
         # Try and correct final issues with repo name
         group["repository_name"] = group.repository_name.str.replace(".git", "")
 
@@ -125,6 +122,9 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
         # Check if the repository exists
         try:
+            # Sleep to be nice to APIs
+            time.sleep(1)
+
             # Call to the GitHub API to check if the repository exists
             repo_data = gh_api.repos.get(
                 owner=row.repository_owner,
@@ -164,6 +164,10 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
         # Check repository languages
         try:
+            # Sleep to be nice to APIs
+            time.sleep(1)
+
+            # Call
             repo_languages = gh_api.repos.list_languages(
                 row.repository_owner,
                 row.repository_name,
@@ -189,6 +193,7 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
                 "Ruby",
                 "C",
                 "C++",
+                "C#",
                 "Java",
                 "Go",
                 "JavaScript",
@@ -258,7 +263,7 @@ def _get_repository_contributors(
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.78)
+        time.sleep(1)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -299,7 +304,7 @@ def _get_repository_contributors(
         ):
             try:
                 # Sleep to be nice to APIs
-                time.sleep(0.78)
+                time.sleep(1)
 
                 user = gh_api.users.get_by_username(contributor.login)
                 successful_results.append(
