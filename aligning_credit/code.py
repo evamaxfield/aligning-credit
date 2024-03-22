@@ -65,11 +65,16 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
 
     # Store these in the errored results
     errored_results = []
-    for _, row in df[df.repository_host.str.lower() != "github"].iterrows():
+    non_github_repos = (
+        df.loc[df.repository_host.str.lower() != "github"].groupby("doi").first()
+    )
+    for _, row in non_github_repos.iterrows():
         errored_results.append(
             ErrorResult(
                 identifier=(
-                    f"{row.repository_host}/{row.repository_owner}/{row.repository_name}"
+                    f"{row.repository_host}/"
+                    f"{row.repository_owner}/"
+                    f"{row.repository_name}"
                 ),
                 step="Repository host check",
                 error="Non-GitHub repository",
@@ -77,20 +82,21 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         )
 
     # Filtering out non-GitHub repositories from the dataframe
-    df = df[df.repository_host.str.lower() == "github"].copy()
+    df = df.loc[df.repository_host.str.lower() == "github"].copy()
 
     # Store these in the errored results
-    for _, row in df[df.repository_name.isna()].iterrows():
+    orgs = df.loc[df.repository_name.isna()].groupby("doi").first()
+    for _, row in orgs.iterrows():
         errored_results.append(
             ErrorResult(
-                identifier=f"{row.repository_owner}/{row.repository_name}",
+                identifier=f"{row.repository_host}/{row.repository_owner}",
                 step="Repository name check",
-                error="Organization URL",
+                error="Organization repository",
             ).to_dict()
         )
 
     # Filtering out non-Repository repositories from the dataframe
-    df = df[~df.repository_name.isna()].copy()
+    df = df.loc[~df.repository_name.isna()].copy()
 
     # Store final results
     successful_results = []
@@ -103,7 +109,10 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.75)
+        time.sleep(0.78)
+
+        # Try and correct final issues with repo name
+        group["repository_name"] = group.repository_name.str.replace(".git", "")
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -143,12 +152,12 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
                 ).to_dict()
             )
             continue
-        except Exception as e:
+        except Exception:
             errored_results.append(
                 ErrorResult(
                     identifier=repo_path,
                     step="Repository existance check",
-                    error=f"Error with GitHub API: {e}",
+                    error="Error with GitHub API service",
                 ).to_dict()
             )
             continue
@@ -159,12 +168,12 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
                 row.repository_owner,
                 row.repository_name,
             )
-        except Exception as e:
+        except Exception:
             errored_results.append(
                 ErrorResult(
                     identifier=repo_path,
                     step="Repository language check",
-                    error=f"Error with GitHub API: {e}",
+                    error="Error with GitHub API service",
                 ).to_dict()
             )
             continue
@@ -186,6 +195,9 @@ def _check_and_filter_repositories(df: pd.DataFrame) -> SuccessAndErroredResults
                 "TypeScript",
                 "Rust",
                 "Julia",
+                "MATLAB",
+                "Stata",
+                "Perl",
             ]
         ):
             errored_results.append(
@@ -246,7 +258,7 @@ def _get_repository_contributors(
         total=df.doi.nunique(),
     ):
         # Sleep to be nice to APIs
-        time.sleep(0.75)
+        time.sleep(0.78)
 
         # Get first row to use for data extraction
         # The other rows have the same repository data so we can just use the first
@@ -258,12 +270,12 @@ def _get_repository_contributors(
                 row.repository_owner,
                 row.repository_name,
             )
-        except Exception as e:
+        except Exception:
             errored_results.append(
                 ErrorResult(
                     identifier=row.repository_name,
                     step="Repository contributors check",
-                    error=f"Error with GitHub API service: {e}",
+                    error="Error with GitHub API service",
                 ).to_dict()
             )
             continue
@@ -287,7 +299,7 @@ def _get_repository_contributors(
         ):
             try:
                 # Sleep to be nice to APIs
-                time.sleep(0.75)
+                time.sleep(0.78)
 
                 user = gh_api.users.get_by_username(contributor.login)
                 successful_results.append(
@@ -306,12 +318,12 @@ def _get_repository_contributors(
                         ),
                     }
                 )
-            except Exception as e:
+            except Exception:
                 errored_results.append(
                     ErrorResult(
                         identifier=contributor.login,
                         step="Repository contributor details check",
-                        error=f"Error with GitHub API service: {e}",
+                        error="Error with GitHub API service",
                     ).to_dict()
                 )
 
